@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/tri_go_ride.iml" filepath="$PROJECT_DIR$/tri_go_ride.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/tri_go_ride_android.iml" filepath="$PROJECT_DIR$/android/tri_go_ride_android.iml" />
     </modules>
   </component>
 </project>

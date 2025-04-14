@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "57222648824",
+    "project_id": "trigoride-ee892",
+    "storage_bucket": "trigoride-ee892.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:57222648824:android:8e670956f5c46de1e6fc0d",
+        "android_client_info": {
+          "package_name": "com.InnoVision.tri_go_ride"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlTksF45qjf7HJa0M19xphdrab3__qwJ0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
