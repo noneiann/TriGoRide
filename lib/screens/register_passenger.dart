@@ -4,12 +4,12 @@ import 'package:tri_go_ride/screens/choose_user.dart';
 import '../services/auth_services.dart';
 import 'passenger_home_screen.dart';
 
-class SplashScreen extends StatefulWidget {
+class RegisterPassenger extends StatefulWidget {
   @override
-  _SplashScreenState createState() => _SplashScreenState();
+  State<RegisterPassenger> createState() => _RegisterPassengerState();
 }
-
-class _SplashScreenState extends State<SplashScreen> {
+/// TODO: Fucking implement this shit, for now it is a copy of the login splash screen
+class _RegisterPassengerState extends State<RegisterPassenger> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final AuthService _authService = AuthService();
@@ -61,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             // Fixed Logo Container - always at the top.
             Container(
-              padding: EdgeInsets.only(top: 96),
+              padding: EdgeInsets.only(top: 128),
               height: 100,
               alignment: Alignment.center,
               child: Icon(
@@ -70,29 +70,30 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: Colors.orange,
               ),
             ),
-            SizedBox(height: 128),
-            Container(
-                width: width,
-                padding: EdgeInsets.symmetric(horizontal: 32),
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Login",
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.headlineLarge?.color,
-                      ),
-                      textAlign: TextAlign.left,
-                    ),
-                    Text("Please login to continue"),
-                  ],
-                )
-            ),
-            SizedBox(height: 40),
+            SizedBox(height: 128 + 64),
             // The rest of the login UI.
+            Container(
+              width: width,
+              padding: EdgeInsets.symmetric(horizontal: 32),
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Register",
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: theme.textTheme.headlineLarge?.color,
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                  Text("Please register to continue"),
+                ],
+              )
+            ),
+
+            SizedBox(height: 40),
             Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
