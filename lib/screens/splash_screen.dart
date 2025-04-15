@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:tri_go_ride/screens/choose_user.dart';
 import '../services/auth_services.dart';
 import 'passenger_home_screen.dart';
 import 'register_screen.dart';
@@ -65,7 +66,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   style: ElevatedButton.styleFrom(minimumSize: Size(double.infinity, 50)),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RegisterScreen())),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChooseUser())),
                   child: Text("Don't have an account? Register", style: TextStyle(color: Colors.white)),
                 )
               ],
