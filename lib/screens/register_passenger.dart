@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/screens/choose_user.dart';
@@ -12,12 +13,15 @@ class RegisterPassenger extends StatefulWidget {
 class _RegisterPassengerState extends State<RegisterPassenger> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
+  final TextEditingController _username = TextEditingController();
+  final TextEditingController _phoneNumber = TextEditingController();
+  final TextEditingController _confirmPassword = TextEditingController();
   final AuthService _authService = AuthService();
 
   String _error = '';
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
-
+  bool _showConfirmPassword =false;
   void _login() async {
     setState(() => _loading = true);
     try {
@@ -39,6 +43,50 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
     }
   }
 
+  void _register() async {
+    setState(() => _loading = true);
+    try {
+      final pwd = _password.text.trim();
+      final confirm = _confirmPassword.text.trim();
+      if (pwd != confirm) {
+        setState(() {
+          _error = 'Register Failed: Passwords do not match';
+        });
+        return;
+      }
+
+      // Create user with Firebase Auth
+      User? user = await _authService.register(
+        _email.text.trim(),
+        pwd,
+      );
+      if (user != null) {
+        // Store additional profile info in Firestore
+        await _authService.firestore
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'username': _username.text.trim(),
+          'email': _email.text.trim(),
+          'phone': _phoneNumber.text.trim(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'userType': "Passenger",
+        });
+
+        // Navigate to Passenger Home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Registration failed: ${e.toString()}';
+      });
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
   @override
   Widget build(BuildContext context) {
     // Get current theme and brightness.
@@ -61,7 +109,7 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
           children: [
             // Fixed Logo Container - always at the top.
             Container(
-              padding: EdgeInsets.only(top: 128),
+              padding: EdgeInsets.only(top: 64),
               height: 100,
               alignment: Alignment.center,
               child: Icon(
@@ -70,27 +118,27 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                 color: Colors.orange,
               ),
             ),
-            SizedBox(height: 128 + 64),
+            SizedBox(height: 100),
             // The rest of the login UI.
             Container(
-              width: width,
-              padding: EdgeInsets.symmetric(horizontal: 32),
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Register",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.headlineLarge?.color,
+                width: width,
+                padding: EdgeInsets.symmetric(horizontal: 32),
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Register",
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.headlineLarge?.color,
+                      ),
+                      textAlign: TextAlign.left,
                     ),
-                    textAlign: TextAlign.left,
-                  ),
-                  Text("Please register to continue"),
-                ],
-              )
+                    Text("Please register to continue"),
+                  ],
+                )
             ),
 
             SizedBox(height: 40),
@@ -113,6 +161,35 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                       child: Row(
                         children: <Widget>[
                           Icon(
+                            Icons.person,
+                            color: iconColor,
+                          ),
+                          SizedBox(width: width * 0.02),
+                          Expanded(
+                            child: TextField(
+                              controller: _username,
+                              decoration: InputDecoration.collapsed(
+                                hintText: 'Username',
+                                hintStyle: hintTextStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      width: width * 0.9,
+                      height: height * 0.06,
+                      padding: EdgeInsets.all(width * 0.03),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: containerColor,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
                             Icons.email,
                             color: iconColor,
                           ),
@@ -122,6 +199,35 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                               controller: _email,
                               decoration: InputDecoration.collapsed(
                                 hintText: 'Email',
+                                hintStyle: hintTextStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      width: width * 0.9,
+                      height: height * 0.06,
+                      padding: EdgeInsets.all(width * 0.03),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: containerColor,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.phone,
+                            color: iconColor,
+                          ),
+                          SizedBox(width: width * 0.02),
+                          Expanded(
+                            child: TextField(
+                              controller: _phoneNumber,
+                              decoration: InputDecoration.collapsed(
+                                hintText: 'Phone Number',
                                 hintStyle: hintTextStyle,
                               ),
                             ),
@@ -177,7 +283,53 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                       ),
                     ),
                     SizedBox(height: 10),
+                    Container(
+                      width: width * 0.9,
+                      height: height * 0.06,
+                      padding: EdgeInsets.all(width * 0.03),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: containerColor,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.lock,
+                            color: iconColor,
+                          ),
+                          SizedBox(width: width * 0.02),
+                          Expanded(
+                            child: TextField(
+                              controller: _confirmPassword,
+                              obscureText: !_showConfirmPassword,
+                              decoration: InputDecoration.collapsed(
+                                hintText: 'Confirm Password',
+                                hintStyle: hintTextStyle,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: width * 0.02),
+                          // Center the IconButton in its allocated space.
+                          IconButton(
+                            padding: EdgeInsets.all(0.01),
+                            icon: Icon(
+                              _showConfirmPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            color: iconColor,
+                            onPressed: () {
+                              setState(() {
+                                _showConfirmPassword = !_showConfirmPassword;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                     // Display error if any.
+                    SizedBox(height: 10),
                     if (_error.isNotEmpty)
                       Text(
                         _error,
@@ -188,8 +340,8 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                     _loading
                         ? CircularProgressIndicator()
                         : ElevatedButton(
-                      onPressed: _login,
-                      child: Text("Login"),
+                      onPressed: _register,
+                      child: Text("Register"),
                       style: ElevatedButton.styleFrom(
                         minimumSize: Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
@@ -207,7 +359,7 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                         );
                       },
                       child: Text(
-                        "Don't have an account? Register",
+                        "Already have an account? Login",
                         style: TextStyle(color: Colors.orange),
                       ),
                     ),
