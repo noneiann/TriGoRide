@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'screens/splash_screen.dart'; // Replace with your starting screen
+import 'ui/splash_screen.dart'; // Replace with your starting screen
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

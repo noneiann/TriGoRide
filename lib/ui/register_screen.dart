@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:tri_go_ride/ui/screens/passenger_home_screen.dart';
 import '../services/auth_services.dart';
-import 'passenger_home_screen.dart';
+
 
 class RegisterScreen extends StatefulWidget {
   @override

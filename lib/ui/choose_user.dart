@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tri_go_ride/screens/register_driver.dart';
-import 'package:tri_go_ride/screens/register_passenger.dart';
+import 'package:tri_go_ride/ui/register_driver.dart';
+import 'package:tri_go_ride/ui/register_passenger.dart';
 import '../services/auth_services.dart';
 
 

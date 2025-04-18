@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:tri_go_ride/screens/splash_screen.dart';
-import '../services/auth_services.dart';
+import 'package:tri_go_ride/ui/splash_screen.dart';
+import '../../services/auth_services.dart';
 
 
 

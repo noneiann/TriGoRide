@@ -1,16 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tri_go_ride/screens/choose_user.dart';
+import 'package:tri_go_ride/ui/choose_user.dart';
 import '../services/auth_services.dart';
-import 'passenger_home_screen.dart';
+import './screens/passenger_home_screen.dart';
 
-class RegisterPassenger extends StatefulWidget {
+class RegisterDriver extends StatefulWidget {
   @override
-  State<RegisterPassenger> createState() => _RegisterPassengerState();
+  State<RegisterDriver> createState() => _RegisterDriverState();
 }
 /// TODO: Fucking implement this shit, for now it is a copy of the login splash screen
-class _RegisterPassengerState extends State<RegisterPassenger> {
+class _RegisterDriverState extends State<RegisterDriver> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _username = TextEditingController();
@@ -22,7 +22,26 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
   bool _showConfirmPassword =false;
-
+  void _login() async {
+    setState(() => _loading = true);
+    try {
+      User? user = await _authService.signIn(
+        _email.text.trim(),
+        _password.text.trim(),
+      );
+      if (user != null) {
+        // Navigate to Passenger home screen after successful login.
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => HomeScreen()),
+        );
+      }
+    } catch (e) {
+      setState(() => _error = 'Login failed: ${e.toString()}');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
 
   void _register() async {
     setState(() => _loading = true);
@@ -51,17 +70,35 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
           'username': _username.text.trim(),
           'email': _email.text.trim(),
           'phone': _phoneNumber.text.trim(),
-          'password':_password.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
-          'userType': "Passenger",
+          'userType': "Driver",
+          'verified': false,
+          'firstTimeLogIn': true
         });
 
-        // Navigate to Passenger Home
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeScreen()),
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text("Registration Successful"),
+            content: Text("Welcome! Proceed to account setup to setup your driver profile."),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => HomeScreen()),
+                  );
+                },
+                child: Text("OK"),
+              ),
+            ],
+          ),
         );
       }
+
+
     } catch (e) {
       setState(() {
         _error = 'Registration failed: ${e.toString()}';

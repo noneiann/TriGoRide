@@ -1,8 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tri_go_ride/screens/choose_user.dart';
+import 'package:tri_go_ride/ui/choose_user.dart';
+import 'package:tri_go_ride/ui/root_page_rider.dart';
 import '../services/auth_services.dart';
-import 'passenger_home_screen.dart';
+import './screens/passenger_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   @override
@@ -20,6 +22,10 @@ class _SplashScreenState extends State<SplashScreen> {
 
   void _login() async {
     setState(() => _loading = true);
+    CollectionReference<Map<String, dynamic>> users =
+    FirebaseFirestore.instance.collection('users');
+
+
     try {
       User? user = await _authService.signIn(
         _email.text.trim(),
@@ -27,10 +33,30 @@ class _SplashScreenState extends State<SplashScreen> {
       );
       if (user != null) {
         // Navigate to Passenger home screen after successful login.
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeScreen()),
-        );
+        DocumentSnapshot<Map<String, dynamic>> userSnapshot =
+        await users.doc(user.email).get();
+        if (userSnapshot.exists) {
+          final data = userSnapshot.data()!;
+
+          // if (data["userType"] == 'Passenger'){
+          //   Navigator.pushReplacement(
+          //     context,
+          //     MaterialPageRoute(builder: (_) => RootPage()),
+          //   );
+          // }
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => RootPageRider()),
+          );
+        } else{
+          showDialog(context: context, builder: (context) => AlertDialog(
+            title: Text("User not found"),
+            content: Text("No user exists in our database!"),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Okay'))
+            ],
+          ));
+        }
       }
     } catch (e) {
       setState(() => _error = 'Login failed: ${e.toString()}');
