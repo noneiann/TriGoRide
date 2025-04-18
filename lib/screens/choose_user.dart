@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:tri_go_ride/screens/register_driver.dart';
 import 'package:tri_go_ride/screens/register_passenger.dart';
 import '../services/auth_services.dart';
 
@@ -43,11 +44,10 @@ class _ChooseUserState extends State<ChooseUser> {
                         // Rider box
                         GestureDetector(
                           onTap: () {
-                            // Handle Rider registration (navigate to HomeScreen, for example)
-                            // Navigator.push(
-                            //   context,
-                            //   MaterialPageRoute(builder: (context) => HomeScreen()),
-                            // );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => RegisterDriver()),
+                            );
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Rider option selected.')),
                             );
