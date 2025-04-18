@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
-import 'package:tri_go_ride/ui/splash_screen.dart';
-import '../../services/auth_services.dart';
+import 'package:tri_go_ride/screens/splash_screen.dart';
+import '../services/auth_services.dart';
+import 'book_ride.dart';
 
 
 
@@ -35,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Location'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
       body: SafeArea(
@@ -91,7 +92,11 @@ class _HomeScreenState extends State<HomeScreen> {
       elevation: 4,
       child: InkWell(
         onTap: () {
-          if (label == "Ride History"){
+          if (label == "Book a Ride"){
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => BookRideScreen()),
+            );
           }
         },
         child: Center(
