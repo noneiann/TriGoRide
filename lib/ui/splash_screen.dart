@@ -2,11 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
+import 'package:tri_go_ride/ui/root_page_passenger.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
 import '../services/auth_services.dart';
-import './screens/passenger_home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
   @override
   _SplashScreenState createState() => _SplashScreenState();
 }
@@ -38,16 +40,18 @@ class _SplashScreenState extends State<SplashScreen> {
         if (userSnapshot.exists) {
           final data = userSnapshot.data()!;
 
-          // if (data["userType"] == 'Passenger'){
-          //   Navigator.pushReplacement(
-          //     context,
-          //     MaterialPageRoute(builder: (_) => RootPage()),
-          //   );
-          // }
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => RootPageRider()),
-          );
+          if (data["userType"] == 'Passenger'){
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => RootPagePassenger()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => RootPageRider()),
+            );
+            }
+
         } else{
           showDialog(context: context, builder: (context) => AlertDialog(
             title: Text("User not found"),
@@ -214,13 +218,13 @@ class _SplashScreenState extends State<SplashScreen> {
                         ? CircularProgressIndicator()
                         : ElevatedButton(
                       onPressed: _login,
-                      child: Text("Login"),
                       style: ElevatedButton.styleFrom(
                         minimumSize: Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
+                      child: Text("Login"),
                     ),
                     SizedBox(height: 10),
                     // Navigation to registration.

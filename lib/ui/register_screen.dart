@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:tri_go_ride/ui/screens/passenger_home_screen.dart';
+import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 import '../services/auth_services.dart';
 
 
 class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
@@ -60,8 +62,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? CircularProgressIndicator()
                     : ElevatedButton(
                   onPressed: _register,
-                  child: Text("Register"),
                   style: ElevatedButton.styleFrom(minimumSize: Size(double.infinity, 50)),
+                  child: Text("Register"),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),

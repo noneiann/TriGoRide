@@ -1,18 +1,41 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../location_picker_screen.dart';
+import '../../location_picker_screen.dart';
+import 'package:tri_go_ride/services/auth_services.dart';
 
 class BookRideScreen extends StatefulWidget {
+  const BookRideScreen({super.key});
+
   @override
   _BookRideScreenState createState() => _BookRideScreenState();
 }
 
 class _BookRideScreenState extends State<BookRideScreen> {
+  final AuthService _authService = AuthService();
   LatLng? pickUpLatLng;
   LatLng? dropOffLatLng;
-
   String? pickUpLabel;
   String? dropOffLabel;
+  late CollectionReference bookings;
+  late String passenger;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+ bookings = _authService.firestore.collection('bookings');
+ _authService.firestore.collection('users')
+     .doc(_authService.getUser()
+     .email!)
+     .get()
+     .then( (doc) {
+   final data = doc.data() as Map<String, dynamic>;
+   setState(() {
+     passenger = data['username'];
+   });
+ });
+    super.initState();
+  }
 
   Future<void> _selectLocation(bool isPickup) async {
     final LatLng? selected = await Navigator.push(
@@ -33,6 +56,15 @@ class _BookRideScreenState extends State<BookRideScreen> {
     }
   }
 
+  Future<void> _addBooking() {
+      return bookings.add({
+        'dateBooked': Timestamp.now(),
+        'passenger': passenger,
+        'pickUp': GeoPoint(pickUpLatLng!.latitude, pickUpLatLng!.longitude),
+        'dropOff': GeoPoint(dropOffLatLng!.latitude, dropOffLatLng!.longitude),
+      }).then((value) => print('booking added'));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,7 +78,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                 child: Column(
                   children: [
                     Image.asset(
-                      'assets/images/rickshaw_logo.png',
+                      'assets/TriGoRideLogo.png',
                       height: 100,
                     ),
                     SizedBox(height: 8),
@@ -55,7 +87,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: Colors.deepOrange,
                         letterSpacing: 1.5,
                       ),
                     ),
@@ -98,11 +129,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
               ElevatedButton(
                 onPressed: () {
-                  // Save or proceed with pickup/drop-off data
+                  _addBooking();
                   print("Pickup: $pickUpLatLng");
                   print("Drop-off: $dropOffLatLng");
                 },
-                child: Text("Book Ride", style: TextStyle(fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepOrange,
                   minimumSize: Size(double.infinity, 50),
@@ -110,6 +140,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
+                child: Text("Book Ride", style: TextStyle(fontSize: 16)),
               ),
             ],
           ),
