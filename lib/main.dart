@@ -16,6 +16,8 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     final brightness = MediaQuery.of(context).platformBrightness;
@@ -28,6 +30,9 @@ class MyApp extends StatelessWidget {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
+          titleTextStyle: TextStyle(color: Colors.black),
+        iconTheme: IconThemeData(color: Colors.black54),
+
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -43,6 +48,7 @@ class MyApp extends StatelessWidget {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.black,
         foregroundColor: Colors.orange,
+        titleTextStyle: TextStyle(color: Colors.orange)
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

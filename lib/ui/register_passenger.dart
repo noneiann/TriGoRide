@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
 import '../services/auth_services.dart';
-import './screens/passenger_home_screen.dart';
+import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 
 class RegisterPassenger extends StatefulWidget {
+  const RegisterPassenger({super.key});
+
   @override
   State<RegisterPassenger> createState() => _RegisterPassengerState();
 }
@@ -324,13 +326,13 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                         ? CircularProgressIndicator()
                         : ElevatedButton(
                       onPressed: _register,
-                      child: Text("Register"),
                       style: ElevatedButton.styleFrom(
                         minimumSize: Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
+                      child: Text("Register"),
                     ),
                     SizedBox(height: 10),
                     // Navigation to registration.

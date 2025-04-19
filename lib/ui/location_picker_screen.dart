@@ -3,6 +3,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 
 class LocationPickerScreen extends StatefulWidget {
+  const LocationPickerScreen({super.key});
+
   @override
   _LocationPickerScreenState createState() => _LocationPickerScreenState();
 }
@@ -19,19 +21,19 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<void> _fetchUserLocation() async {
-    bool _serviceEnabled;
-    PermissionStatus _permissionGranted;
+    bool serviceEnabled;
+    PermissionStatus permissionGranted;
 
-    _serviceEnabled = await _location.serviceEnabled();
-    if (!_serviceEnabled) {
-      _serviceEnabled = await _location.requestService();
-      if (!_serviceEnabled) return;
+    serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) return;
     }
 
-    _permissionGranted = await _location.hasPermission();
-    if (_permissionGranted == PermissionStatus.denied) {
-      _permissionGranted = await _location.requestPermission();
-      if (_permissionGranted != PermissionStatus.granted) return;
+    permissionGranted = await _location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await _location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) return;
     }
 
     final userLocation = await _location.getLocation();
@@ -80,11 +82,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   Navigator.pop(context, _selectedLatLng);
                 }
               },
-              child: Text("Confirm Location"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepOrange,
                 padding: EdgeInsets.symmetric(vertical: 14),
               ),
+              child: Text("Confirm Location"),
             ),
           )
         ],
