@@ -14,44 +14,31 @@ class RootPageRider extends StatefulWidget {
 
 class _RootPageRiderState extends State<RootPageRider> {
   int _bottomNavIndex = 0;
-  List<Widget> pages = const [
+  List<Widget> pages = [
     RiderHomeScreen(),
-    RideHistoryPage(),
-    RiderBookingsPage(),
-    RiderFeedbacks()
+    const RiderBookingsPage(),
+    const RideHistoryPage(),
+    const RiderFeedbacks()
   ];
 
   List<IconData> iconList = [
     Icons.home,
-    Icons.history,
     Icons.book,
+    Icons.history,
     Icons.feedback
   ];
 
   List<String> titleList = [
     'Home',
-    'Ride History',
     'Bookings',
+    'Ride History',
     'Feedbacks'
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(titleList[_bottomNavIndex], style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w500
-            ),),
-            IconButton(onPressed: () => {print('notifs pressed')}, icon: Icon(Icons.notifications))
-          ],
-        ),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0.0
-      ),
+
       body: IndexedStack(
         index: _bottomNavIndex,
         children: pages,
@@ -59,8 +46,8 @@ class _RootPageRiderState extends State<RootPageRider> {
       bottomNavigationBar: AnimatedBottomNavigationBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         splashColor: Colors.orange.shade900,
-        activeColor: Colors.orange[900],
-        inactiveColor: Colors.orange,
+        activeColor: Colors.orange,
+        inactiveColor: Colors.grey,
         icons: iconList,
         activeIndex: _bottomNavIndex,
         gapLocation: GapLocation.center,
@@ -72,6 +59,8 @@ class _RootPageRiderState extends State<RootPageRider> {
         },
         
       ),
+      floatingActionButton: FloatingActionButton(onPressed: () => {}, child: Icon(Icons.search), backgroundColor: Theme.of(context).primaryColor),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
     );
   }
