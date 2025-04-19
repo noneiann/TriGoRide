@@ -41,8 +41,6 @@ class MyApp extends StatelessWidget {
         titleTextStyle: TextStyle(color: Colors.black),
         iconTheme: IconThemeData(color: Colors.black54),
 
-          titleTextStyle: TextStyle(color: Colors.black),
-        iconTheme: IconThemeData(color: Colors.black54),
 
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -75,7 +73,7 @@ class MyApp extends StatelessWidget {
         onSurface: Colors.white,
         onBackground: Colors.white,
         onError: Colors.white,
-        titleTextStyle: TextStyle(color: Colors.orange)
+
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
