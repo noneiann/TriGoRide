@@ -1,5 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -44,9 +43,9 @@ class AuthService {
     });
   }
 
-  String getUser(){
+  User getUser(){
     try {
-      return _auth.currentUser!.uid;
+      return _auth.currentUser!;
     } catch (e) {
       print('Get User Error: $e');
       rethrow;

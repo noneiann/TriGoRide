@@ -1,66 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
-import 'package:tri_go_ride/ui/splash_screen.dart';
-import '../../services/auth_services.dart';
-
-
+import 'package:tri_go_ride/services/auth_services.dart';
+import 'book_ride.dart';
 
 class HomeScreen extends StatefulWidget {
-  HomeScreen({super.key});
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-
 class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
-  late String name;
+  String? name;
 
   @override
   void initState() {
     super.initState();
-    _authService.logUser();
-    name = _authService.getUser();
+    setName();
+  }
+
+  void setName() {
+    _authService.firestore.collection('users').doc(_authService.getUser().email!).get().then((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      setState(() {
+        name = data['username'];
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: Colors.orange,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Location'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
-        ],
-      ),
       body: SafeArea(
         child: Column(
           children: [
-            // Top Bar
-            Container(
-              color: Colors.orange[300],
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Icon(Icons.menu, color: Colors.black),
-                  CircleAvatar(
-                    backgroundImage: AssetImage('assets/images/profile.png'), // Replace with your own image
-                  ),
-                ],
-              ),
-            ),
 
             // Image / Quote Section
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text('Welcome, $name!',
-              ),
+               style: TextStyle(
+                 fontSize: 18,
+                 fontWeight: FontWeight.w500)),
             ),
 
             // Buttons Grid
@@ -91,7 +72,11 @@ class _HomeScreenState extends State<HomeScreen> {
       elevation: 4,
       child: InkWell(
         onTap: () {
-          if (label == "Ride History"){
+          if (label == "Book a Ride"){
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => BookRideScreen()),
+            );
           }
         },
         child: Center(

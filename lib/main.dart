@@ -23,6 +23,8 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     final brightness = MediaQuery.of(context).platformBrightness;
@@ -39,6 +41,9 @@ class MyApp extends StatelessWidget {
         titleTextStyle: TextStyle(color: Colors.black),
         iconTheme: IconThemeData(color: Colors.black54),
 
+          titleTextStyle: TextStyle(color: Colors.black),
+        iconTheme: IconThemeData(color: Colors.black54),
+
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -50,6 +55,7 @@ class MyApp extends StatelessWidget {
     final ThemeData darkTheme = ThemeData(
       useMaterial3: false,
       brightness: Brightness.dark,
+      primarySwatch: Colors.orange,
       scaffoldBackgroundColor: Colors.grey[900],
       primaryColor: Colors.orange,
       appBarTheme: AppBarTheme(
@@ -69,6 +75,7 @@ class MyApp extends StatelessWidget {
         onSurface: Colors.white,
         onBackground: Colors.white,
         onError: Colors.white,
+        titleTextStyle: TextStyle(color: Colors.orange)
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -77,7 +84,6 @@ class MyApp extends StatelessWidget {
         ),
       ),
     );
-
 
     // Use AnnotatedRegion to specify system UI style (e.g., dark icons) so the status bar remains visible.
     return AnnotatedRegion<SystemUiOverlayStyle>(
