@@ -4,13 +4,33 @@ import 'package:cloudinary_url_gen/transformation/resize/resize.dart';
 import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloudinary_flutter/cloudinary_context.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
 
 import '../../../main.dart';
 import '../../../services/auth_services.dart';
+class RiderHomeScreen extends StatefulWidget {
+  const RiderHomeScreen({super.key});
 
-class RiderHomeScreen extends StatelessWidget {
+  @override
+  State<RiderHomeScreen> createState() => _RiderHomeScreenState();
+}
+
+class _RiderHomeScreenState extends State<RiderHomeScreen> {
   final AuthService _authService = AuthService();
-
+  late String name;
+  @override
+  void initState(){
+    @override
+    void initState() {
+      super.initState();
+      name = _authService.getUser().displayName!;
+    }
+  }
+  Map<String, dynamic> Screens = {
+    "Ride History" : RideHistoryPage(),
+    "Feedback" : RiderFeedbacks(),
+  };
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -37,12 +57,12 @@ class RiderHomeScreen extends StatelessWidget {
                     children: [
                       ClipOval(
                         child: CldImageWidget(
-                          cloudinary: cloudinary,
-                          publicId: 'samples/look-up',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                          transformation: Transformation().addTransformation("ar_1.0,c_fill,w_100/r_max/f_png")
+                            cloudinary: cloudinary,
+                            publicId: 'samples/look-up',
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            transformation: Transformation().addTransformation("ar_1.0,c_fill,w_100/r_max/f_png")
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -51,7 +71,7 @@ class RiderHomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hello, Iann',
+                            'Hello, $name',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: theme.textTheme.titleMedium?.color?.withOpacity(0.7),
                             ),
@@ -183,6 +203,8 @@ class RiderHomeScreen extends StatelessWidget {
     );
   }
 }
+
+
 
 class _OptionCard extends StatelessWidget {
   final IconData icon;
