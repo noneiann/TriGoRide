@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'location_picker_screen.dart';
+import '../location_picker_screen.dart';
 
 class BookRideScreen extends StatefulWidget {
   @override
