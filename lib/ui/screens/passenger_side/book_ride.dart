@@ -60,6 +60,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
       return bookings.add({
         'dateBooked': Timestamp.now(),
         'passenger': passenger,
+        'status': 'Pending',
         'pickUp': GeoPoint(pickUpLatLng!.latitude, pickUpLatLng!.longitude),
         'dropOff': GeoPoint(dropOffLatLng!.latitude, dropOffLatLng!.longitude),
       }).then((value) => print('booking added'));
@@ -67,12 +68,29 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFFFF3E0),
+      appBar: AppBar(
+        title: Text(
+          "Book A Ride",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              print('notifs pressed');
+            },
+            icon: Icon(Icons.notifications),
+          )
+        ],
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0.0,
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Center(
                 child: Column(
@@ -93,39 +111,39 @@ class _BookRideScreenState extends State<BookRideScreen> {
                   ],
                 ),
               ),
-              SizedBox(height: 40),
+
 
               // Pick-up Button
-              ElevatedButton.icon(
-                onPressed: () => _selectLocation(true),
-                icon: Icon(Icons.location_on),
-                label: Text(pickUpLabel ?? 'Select Pick-up Location'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.deepOrange,
-                  minimumSize: Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+              Column(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _selectLocation(true),
+                    icon: Icon(Icons.location_on),
+                    label: Text(pickUpLabel ?? 'Select Pick-up Location'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              SizedBox(height: 20),
 
-              // Drop-off Button
-              ElevatedButton.icon(
-                onPressed: () => _selectLocation(false),
-                icon: Icon(Icons.navigation),
-                label: Text(dropOffLabel ?? 'Select Drop-off Location'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.deepOrange,
-                  minimumSize: Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                  SizedBox(height: 20),
+                  // Drop-off Button
+                  ElevatedButton.icon(
+                    onPressed: () => _selectLocation(false),
+                    icon: Icon(Icons.navigation),
+                    label: Text(dropOffLabel ?? 'Select Drop-off Location'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-              SizedBox(height: 30),
+
 
               ElevatedButton(
                 onPressed: () {
@@ -134,7 +152,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                   print("Drop-off: $dropOffLatLng");
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepOrange,
+                  backgroundColor: Colors.green,
                   minimumSize: Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
