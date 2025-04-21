@@ -10,15 +10,30 @@ class PassengerProfile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Color(0xFFF6F6F6),
+      appBar: AppBar(
+        title: Text(
+          "Personal Details",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () {
+              print('notifs pressed');
+            },
+            icon: Icon(Icons.notifications),
+          )
+        ],
+        backgroundColor: theme.scaffoldBackgroundColor,
+        elevation: 0.0,
+      ),
       body: SafeArea(
         child: StreamBuilder< DocumentSnapshot<Map<String, dynamic>> >(
           stream: _users.doc(_uid).snapshots(),
           builder: (ctx, snap) {
             if (snap.connectionState == ConnectionState.waiting)
               return Center(child: CircularProgressIndicator());
-
             // snap.data is DocumentSnapshot<Map<String,dynamic>>?
             final docSnap = snap.data;
             final data    = docSnap?.data();
@@ -30,10 +45,6 @@ class PassengerProfile extends StatelessWidget {
             return ListView(
               padding: EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               children: [
-                Text('Personal details',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                SizedBox(height: 16),
-
                 InfoCard(
                   label: 'Name',
                   content: Text(data['username'] ?? '',
@@ -95,11 +106,12 @@ class InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: Offset(0,2))],
+        color: theme.cardColor, borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: Offset(0,2))],
       ),
       child: Stack(
         children: [
