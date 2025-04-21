@@ -1,5 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:tri_go_ride/services/auth_services.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
 
 class RideHistoryPage extends StatefulWidget {
   const RideHistoryPage({super.key});
@@ -9,26 +12,50 @@ class RideHistoryPage extends StatefulWidget {
 }
 
 class _RideHistoryPageState extends State<RideHistoryPage> {
-  final List<Map<String, dynamic>> _rideHistory = [
-    {
-      'destination': 'SM City Manila',
-      'dateTime': DateTime.now().subtract(Duration(hours: 3)),
-      'fare': 150.0,
-      'status': 'Completed',
-    },
-    {
-      'destination': 'Robinsons Place Ermita',
-      'dateTime': DateTime.now().subtract(Duration(days: 1, hours: 2)),
-      'fare': 120.0,
-      'status': 'Cancelled',
-    },
-    {
-      'destination': 'Quiapo Church',
-      'dateTime': DateTime.now().subtract(Duration(days: 2, hours: 5)),
-      'fare': 100.0,
-      'status': 'Completed',
-    },
-  ];
+  final AuthService _authService = AuthService();
+  List<Map<String, dynamic>> _rideHistory = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRideHistory();
+  }
+
+  Future<void> _fetchRideHistory() async {
+    final currentRider = _authService.getUser().uid;
+    try {
+      final completedSnapshot = await _authService.firestore
+          .collection('bookings')
+          .where('assignedRider', isEqualTo: currentRider)
+          .where('status', isEqualTo: 'Completed')
+          .get();
+
+      final cancelledSnapshot = await _authService.firestore
+          .collection('bookings')
+          .where('assignedRider', isEqualTo: currentRider)
+          .where('status', isEqualTo: 'Cancelled')
+          .get();
+
+      final completed = completedSnapshot.docs.map((doc) => doc.data()).toList();
+      final cancelled = cancelledSnapshot.docs.map((doc) => doc.data()).toList();
+
+      final allRides = [...completed, ...cancelled];
+      allRides.sort((a, b) {
+        final aTime = (a['dateBooked'] as Timestamp).toDate();
+        final bTime = (b['dateBooked'] as Timestamp).toDate();
+        return bTime.compareTo(aTime); // descending
+      });
+
+      setState(() {
+        _rideHistory = allRides;
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Error fetching ride history: $e');
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,27 +63,29 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           "Ride History",
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
         ),
         actions: [
           IconButton(
             onPressed: () {
-              print('notifs pressed');
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const RiderNotificationsPage()));
             },
-            icon: Icon(Icons.notifications),
+            icon: const Icon(Icons.notifications),
           )
         ],
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0.0,
       ),
-      body: Padding(
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
         padding: const EdgeInsets.all(16.0),
         child: _rideHistory.isEmpty
             ? Center(
           child: Text(
-            "No rides yet.",
+            "No completed or cancelled rides yet.",
             style: theme.textTheme.titleMedium,
           ),
         )
@@ -64,6 +93,11 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
           itemCount: _rideHistory.length,
           itemBuilder: (context, index) {
             final ride = _rideHistory[index];
+            final destination = ride['dropOff'].toString() ?? 'Unknown Destination';
+            final dateTime = (ride['dateBooked'] as Timestamp).toDate();
+            final fare = ride['fare'] ?? 0.0;
+            final status = ride['status'];
+
             return Card(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -76,7 +110,7 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      ride['destination'],
+                      destination,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -86,12 +120,11 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          DateFormat('MMM dd, yyyy – hh:mm a')
-                              .format(ride['dateTime']),
+                          DateFormat('MMM dd, yyyy – hh:mm a').format(dateTime),
                           style: theme.textTheme.bodySmall,
                         ),
                         Text(
-                          '₱${ride['fare'].toStringAsFixed(2)}',
+                          '₱${fare.toStringAsFixed(2)}',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: theme.primaryColor,
@@ -101,11 +134,9 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      ride['status'],
+                      status,
                       style: TextStyle(
-                        color: ride['status'] == 'Completed'
-                            ? Colors.green
-                            : Colors.red,
+                        color: status == 'Completed' ? Colors.green : Colors.red,
                         fontWeight: FontWeight.w500,
                       ),
                     ),

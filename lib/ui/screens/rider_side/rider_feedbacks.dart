@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
 
 class RiderFeedbacks extends StatefulWidget {
   const RiderFeedbacks({super.key});
@@ -45,7 +46,7 @@ class _RiderFeedbacksState extends State<RiderFeedbacks> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500),
             ),
             IconButton(
-              onPressed: () => print('notifs pressed'),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => RiderNotificationsPage())),
               icon: const Icon(Icons.notifications),
             )
           ],

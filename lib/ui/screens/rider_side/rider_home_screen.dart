@@ -4,8 +4,11 @@ import 'package:cloudinary_url_gen/transformation/resize/resize.dart';
 import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloudinary_flutter/cloudinary_context.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_settings.dart';
 
 import '../../../main.dart';
 import '../../../services/auth_services.dart';
@@ -18,21 +21,43 @@ class RiderHomeScreen extends StatefulWidget {
 
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
   final AuthService _authService = AuthService();
-  late String name;
-  @override
-  void initState(){
-    @override
-    void initState() {
-      super.initState();
-      name = _authService.getUser().displayName!;
-    }
-  }
-  Map<String, dynamic> Screens = {
-    "Ride History" : RideHistoryPage(),
-    "Feedback" : RiderFeedbacks(),
+  bool _loading = true;
+  String name = '';
+
+  final Map<String, Widget> screens = {
+    'Look for Passengers': PassengerSearchPage(),  // ← replace with your real search page
+    'Ride History': RideHistoryPage(),
+    'Feedback': RiderFeedbacks(),
+    'Settings': RiderSettingsPage(),               // ← replace with your settings page
   };
+
+  @override
+  void initState() {
+    super.initState();
+    setName();
+  }
+
+   void setName() async {
+     final doc = await _authService.firestore
+         .collection("users")
+         .doc(_authService.getUser().email)
+         .get();
+
+     final fetched = doc.data()?['username'] as String? ?? 'Guest';
+     setState(() {
+       name = fetched;
+       _loading = false;
+     });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -85,7 +110,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                     ],
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {Navigator.push(context, MaterialPageRoute(builder: (context) => RiderNotificationsPage()));},
                     icon: Icon(Icons.notifications, size: 32, color: theme.iconTheme.color),
                   ),
                 ],
@@ -103,81 +128,62 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               ),
             ),
 
-            const SizedBox(height: 32),
 
             // Options grid
-            Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _OptionCard(
-                        icon: Icons.search,
-                        label: 'Look for Passengers',
-                        onTap: () {},
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _OptionCard(
-                        icon: Icons.history,
-                        label: 'Ride History',
-                        onTap: () {},
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _OptionCard(
-                        icon: Icons.feedback_rounded,
-                        label: 'Feedback',
-                        onTap: () {},
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _OptionCard(
-                        icon: Icons.settings,
-                        label: 'Settings',
-                        onTap: () {},
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            GridView.count(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,         // a little less horizontal gap
+              mainAxisSpacing: 12,          // a little less vertical gap
+              childAspectRatio: 1.6,        // width : height ratio → 1:1 makes squarer, smaller cards
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+
+              children: screens.entries.map((entry) {
+                return SizedBox(
+                  height: 100,               // lock in a max height for each cell
+                  child: _OptionCard(
+                    icon: _iconForLabel(entry.key),
+                    label: entry.key,
+                    onTap: () {
+                      final page = screens[entry.key]!;
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => page),
+                      );
+                    },
+                  ),
+                );
+              }).toList(),
             ),
 
             const SizedBox(height: 24),
 
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              color: theme.primaryColor.withOpacity(0.1),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Today’s Trips', style: theme.textTheme.bodyMedium),
-                        Text('3 Completed', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Earnings', style: theme.textTheme.bodyMedium),
-                        Text('₱750.00', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            // Card(
+            //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            //   color: theme.primaryColor.withOpacity(0.1),
+            //   child: Padding(
+            //     padding: const EdgeInsets.all(16),
+            //     child: Row(
+            //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            //       children: [
+            //         Column(
+            //           crossAxisAlignment: CrossAxisAlignment.start,
+            //           children: [
+            //             Text('Today’s Trips', style: theme.textTheme.bodyMedium),
+            //             Text('3 Completed', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            //           ],
+            //         ),
+            //         Column(
+            //           crossAxisAlignment: CrossAxisAlignment.end,
+            //           children: [
+            //             Text('Earnings', style: theme.textTheme.bodyMedium),
+            //             Text('₱750.00', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            //           ],
+            //         ),
+            //       ],
+            //     ),
+            //   ),
+            // ),
 
             const SizedBox(height: 24),
 
@@ -245,5 +251,20 @@ class _OptionCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+IconData _iconForLabel(String label) {
+  switch (label) {
+    case 'Look for Passengers':
+      return Icons.search;
+    case 'Ride History':
+      return Icons.history;
+    case 'Feedback':
+      return Icons.feedback_rounded;
+    case 'Settings':
+      return Icons.settings;
+    default:
+      return Icons.help_outline;
   }
 }
