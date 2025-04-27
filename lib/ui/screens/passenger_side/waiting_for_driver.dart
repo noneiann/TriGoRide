@@ -52,7 +52,7 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
             return GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: widget.pickUp,
-                zoom: 12,
+                zoom: 15,
               ),
               markers: {
                 Marker(

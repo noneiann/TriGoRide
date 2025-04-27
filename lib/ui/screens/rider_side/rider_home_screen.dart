@@ -7,6 +7,7 @@ import 'package:cloudinary_flutter/cloudinary_context.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_settings.dart';
 
@@ -28,7 +29,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     'Look for Passengers': PassengerSearchPage(),  // ← replace with your real search page
     'Ride History': RideHistoryPage(),
     'Feedback': RiderFeedbacks(),
-    'Settings': RiderSettingsPage(),               // ← replace with your settings page
+    'Profile': RiderProfile(),               // ← replace with your settings page
   };
 
   @override
@@ -40,7 +41,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
    void setName() async {
      final doc = await _authService.firestore
          .collection("users")
-         .doc(_authService.getUser().email)
+         .doc(_authService.getUser()?.email)
          .get();
 
      final fetched = doc.data()?['username'] as String? ?? 'Guest';
@@ -262,8 +263,8 @@ IconData _iconForLabel(String label) {
       return Icons.history;
     case 'Feedback':
       return Icons.feedback_rounded;
-    case 'Settings':
-      return Icons.settings;
+    case 'Profile':
+      return Icons.person;
     default:
       return Icons.help_outline;
   }

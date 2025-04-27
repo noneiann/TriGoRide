@@ -5,7 +5,7 @@ import 'package:tri_go_ride/services/auth_services.dart';
 
 class PassengerProfile extends StatelessWidget {
   final _users = AuthService().firestore.collection('users');
-  final _uid   = AuthService().getUser().email;
+  final _uid   = AuthService().getUser()?.email;
 
 
   @override
@@ -174,7 +174,7 @@ class _EditFieldPageState extends State<EditFieldPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final uid = AuthService().getUser().email;
+      final uid = AuthService().getUser()?.email;
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)

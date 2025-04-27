@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/book_ride.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_profile.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_ride_history.dart';
-import 'package:tri_go_ride/ui/splash_screen.dart';
+import 'package:tri_go_ride/ui/login_screen.dart';
 
 import '../../../main.dart';
 import '../../../services/auth_services.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,30 +19,58 @@ class _HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
   bool _loading = true;
   String name = '';
+  List<Map<String, dynamic>> recentActivities = [];
 
   final Map<String, Widget> screens = {
-    'Book A Ride': BookRideScreen(),  // ← replace with your real search page
+    'Book A Ride': BookRideScreen(),
     'Ride History': PassengerRideHistory(),
     'Profile': PassengerProfile(),
-    'Logout': SplashScreen(),               // ← replace with your settings page
+    'Logout': LoginPage(),
   };
 
   @override
   void initState() {
     super.initState();
     setName();
+    fetchNotifications();
   }
 
+  // Set user name
   void setName() async {
     final doc = await _authService.firestore
         .collection("users")
-        .doc(_authService.getUser().email)
+        .doc(_authService.getUser()?.email)
         .get();
 
     final fetched = doc.data()?['username'] as String? ?? 'Guest';
     setState(() {
       name = fetched;
       _loading = false;
+    });
+  }
+  String formatTimestamp(DateTime timestamp) {
+    final DateFormat formatter = DateFormat('MMM dd, yyyy h:mm a'); // Example: "Apr 27, 2025 3:30 PM"
+    return formatter.format(timestamp);
+  }
+  void fetchNotifications() {
+    _authService.firestore
+        .collection("notifs")
+        .where("userId", isEqualTo: _authService.getUser()?.email)
+        .orderBy("timestamp", descending: true)
+        .limit(5)
+        .snapshots()  // Listen for real-time changes
+        .listen((snapshot) {
+      final notifications = snapshot.docs.map((doc) {
+        return {
+          'message': doc['message'],
+          'timestamp': doc['timestamp'].toDate(),
+          'type': doc['type'],
+        };
+      }).toList();
+
+      setState(() {
+        recentActivities = notifications.take(3).toList(); // Limit to 3 notifications
+      });
     });
   }
 
@@ -60,8 +90,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           children: [
             const SizedBox(height: 64),
-
-            // Header with profile image and greeting
             Container(
               height: 100,
               decoration: BoxDecoration(
@@ -94,17 +122,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   IconButton(
-                    onPressed: () {// Navigator.push(context, MaterialPageRoute(builder: (context) => PassengerNotificationsPage()));
-                      },
+                    onPressed: () {},
                     icon: Icon(Icons.notifications, size: 32, color: theme.iconTheme.color),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 32),
-
-            // Prompt text
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -112,95 +136,55 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: theme.textTheme.titleMedium,
               ),
             ),
-
-
-            // Options grid
             GridView.count(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,         // a little less horizontal gap
-              mainAxisSpacing: 12,          // a little less vertical gap
-              childAspectRatio: 1.6,        // width : height ratio → 1:1 makes squarer, smaller cards
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.6,
               shrinkWrap: true,
               physics: NeverScrollableScrollPhysics(),
-
               children: screens.entries.map((entry) {
                 return SizedBox(
-                  height: 100,               // lock in a max height for each cell
+                  height: 100,
                   child: _OptionCard(
                     icon: _iconForLabel(entry.key),
                     label: entry.key,
                     onTap: () {
                       final page = screens[entry.key]!;
-                      if(entry.key != 'Logout') {
+                      if (entry.key != 'Logout') {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => page),
                         );
                       } else {
                         _authService.signOut();
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => SplashScreen()));
+                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LoginPage()));
                       }
                     },
                   ),
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 24),
-
-            // Card(
-            //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            //   color: theme.primaryColor.withOpacity(0.1),
-            //   child: Padding(
-            //     padding: const EdgeInsets.all(16),
-            //     child: Row(
-            //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //       children: [
-            //         Column(
-            //           crossAxisAlignment: CrossAxisAlignment.start,
-            //           children: [
-            //             Text('Today’s Trips', style: theme.textTheme.bodyMedium),
-            //             Text('3 Completed', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            //           ],
-            //         ),
-            //         Column(
-            //           crossAxisAlignment: CrossAxisAlignment.end,
-            //           children: [
-            //             Text('Earnings', style: theme.textTheme.bodyMedium),
-            //             Text('₱750.00', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            //           ],
-            //         ),
-            //       ],
-            //     ),
-            //   ),
-            // ),
-
-            const SizedBox(height: 24),
-
             Align(
               alignment: Alignment.centerLeft,
               child: Text('Recent Activity', style: theme.textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
-            ListTile(
-              leading: Icon(Icons.directions_bike, color: theme.primaryColor),
-              title: Text('Completed a ride to SM City', style: theme.textTheme.bodyMedium),
-              subtitle: Text('10 mins ago'),
-            ),
-            ListTile(
-              leading: Icon(Icons.location_pin, color: theme.primaryColor),
-              title: Text('You Booked A Ride!', style: theme.textTheme.bodyMedium),
-              subtitle: Text('30 mins ago'),
-            ),
-
+            // Display real-time updates for the notifications
+            ...recentActivities.map((activity) {
+              return ListTile(
+                leading: Icon(_iconForNotificationType(activity['type']), color: theme.primaryColor),
+                title: Text(activity['message'], style: theme.textTheme.bodyMedium),
+                subtitle: Text(formatTimestamp(activity['timestamp'])),
+              );
+            }).toList(),
           ],
         ),
       ),
     );
   }
 }
-
-
 
 class _OptionCard extends StatelessWidget {
   final IconData icon;
@@ -256,5 +240,18 @@ IconData _iconForLabel(String label) {
       return Icons.logout;
     default:
       return Icons.help_outline;
+  }
+}
+
+IconData _iconForNotificationType(String type) {
+  switch (type) {
+    case 'booking':
+      return Icons.directions_bike;
+    case 'profile':
+      return Icons.person;
+    case 'promotion':
+      return Icons.local_offer;
+    default:
+      return Icons.notifications;
   }
 }

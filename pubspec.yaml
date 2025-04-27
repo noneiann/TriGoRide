@@ -40,17 +40,23 @@ dependencies:
   flutter_svg: ^2.0.7
   animated_bottom_navigation_bar: ^1.4.0
   page_transition: ^2.2.1
-  google_maps_webservice: ^0.0.19+1
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   cloud_firestore: ^5.6.6
   cloudinary_flutter: ^1.0.0
   cloudinary_url_gen: ^1.0.0
-  intl: ^0.18.1
-  google_directions_api: ^0.9.1
+  intl: ^0.20.2
+  google_directions_api: ^0.10.0
   flutter_dotenv: ^5.2.1
-  flutter_polyline_points: ^1.0.0
+  flutter_polyline_points: ^2.1.0
+  geocoding: ^2.0.5
+  http: ^1.2.1
+  firebase_messaging: ^15.2.5
+  timezone: ^0.10.0
+  flutter_local_notifications: ^19.1.0
+  googleapis_auth: ^2.0.0
 
 
 dev_dependencies:
@@ -78,8 +84,10 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/
+    - assets/tricycle.png
     - assets/TriGoRideLogo.png
     - .env
+    - assets/service-account.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

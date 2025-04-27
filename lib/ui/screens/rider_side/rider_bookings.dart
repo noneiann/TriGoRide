@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -28,10 +29,19 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
   bool _loading = true;
   Map<String, dynamic>? _acceptedBooking;
 
+  // periodic update timer
+  Timer? _locationUpdateTimer;
+
   @override
   void initState() {
     super.initState();
     _initialize();
+  }
+
+  @override
+  void dispose() {
+    _locationUpdateTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _initialize() async {
@@ -40,10 +50,12 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
       _fetchUserLocation(),
       _loadAcceptedBooking(),
     ]);
-    print(_acceptedBooking);
+
     if (_acceptedBooking != null) {
       await _getRoadPolylines();
+      _startLocationUpdates();  // begin sending location updates
     }
+
     setState(() => _loading = false);
   }
 
@@ -63,9 +75,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
   }
 
   Future<void> _loadAcceptedBooking() async {
-    setState(() => _loading = true);
     try {
-      final uid = _authService.getUser().uid;
+      final uid = _authService.getUser()?.uid;
       final snap = await _authService.firestore
           .collection('bookings')
           .where('assignedRider', isEqualTo: uid)
@@ -75,62 +86,68 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
       if (snap.docs.isNotEmpty) {
         final doc = snap.docs.first;
-        final d = doc.data() as Map<String, dynamic>;
+        final d = doc.data();
 
-        // Safe‐cast to String? and provide fallback
-        final passenger = d['passenger']?.toString() ?? 'Unknown';
-        final phone     = d['phone']    ?.toString() ?? 'N/A';
-
-        final GeoPoint? pickupGP  = d['pickUp']  as GeoPoint?;
+        final GeoPoint? pickupGP  = d['pickUp'] as GeoPoint?;
         final GeoPoint? dropoffGP = d['dropOff'] as GeoPoint?;
         final Timestamp? ts       = d['dateBooked'] as Timestamp?;
 
-        if (pickupGP == null || dropoffGP == null || ts == null) {
-          debugPrint('Booking ${doc.id} missing required geo or date fields');
-          _acceptedBooking = null;
-        } else {
+        if (pickupGP != null && dropoffGP != null && ts != null) {
           _acceptedBooking = {
             'id'       : doc.id,
-            'passenger': passenger,
-            'phone'    : phone,
+            'passenger': d['passenger']?.toString() ?? 'Unknown',
+            'phone'    : d['phone']?.toString() ?? 'N/A',
             'pickUp'   : pickupGP,
             'dropOff'  : dropoffGP,
             'datetime' : ts.toDate(),
             'status'   : d['status']
           };
         }
-      } else {
-        _acceptedBooking = null;
       }
     } catch (e) {
       debugPrint('Error loading booking: $e');
-      _acceptedBooking = null;
-    } finally {
-      setState(() => _loading = false);
     }
   }
 
+  void _startLocationUpdates() {
+    // send every 3 seconds
+    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      await _sendCurrentLocation();
+    });
+  }
+
+  Future<void> _sendCurrentLocation() async {
+    try {
+      final loc = await _location.getLocation();
+      if (loc.latitude != null && loc.longitude != null && _acceptedBooking != null) {
+        await _authService.firestore
+            .collection('bookings')
+            .doc(_acceptedBooking!['id'])
+            .update({
+          'driverLocation': GeoPoint(loc.latitude!, loc.longitude!),
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating driver location: $e');
+    }
+  }
 
   Future<void> _getRoadPolylines() async {
     if (_acceptedBooking == null) return;
-    final GeoPoint p = _acceptedBooking!['pickUp'] as GeoPoint;
-    final GeoPoint d = _acceptedBooking!['dropOff'] as GeoPoint;
+    final GeoPoint p = _acceptedBooking!['pickUp'];
+    final GeoPoint d = _acceptedBooking!['dropOff'];
 
     await dotenv.load(fileName: ".env");
     final apiKey = dotenv.get('GOOGLEMAPS_APIKEY');
     final polylinePoints = PolylinePoints();
 
     final result = await polylinePoints.getRouteBetweenCoordinates(
-      apiKey,
-      PointLatLng(p.latitude, p.longitude),
-      PointLatLng(d.latitude, d.longitude),
-      travelMode: TravelMode.driving,
+        googleApiKey: apiKey,
+        request: PolylineRequest(origin: PointLatLng(p.latitude, p.longitude), destination: PointLatLng(d.latitude, d.longitude), mode: TravelMode.driving,)
     );
 
     if (result.points.isNotEmpty) {
-      final route = result.points
-          .map((pt) => LatLng(pt.latitude, pt.longitude))
-          .toList();
+      final route = result.points.map((pt) => LatLng(pt.latitude, pt.longitude)).toList();
 
       _polylines.add(Polyline(
         polylineId: const PolylineId('route'),
@@ -139,7 +156,6 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         color: Colors.blue,
       ));
 
-      // once map is ready, animate camera to fit
       if (_mapController != null) {
         final bounds = _calculateBounds(route);
         _mapController!.animateCamera(
@@ -147,7 +163,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         );
       }
     } else {
-      debugPrint('Directions API returned no points: ${result.errorMessage}');
+      debugPrint('Directions API returned no points: \${result.errorMessage}');
     }
   }
 
@@ -167,13 +183,18 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
   void _completeRide() async {
     if (_acceptedBooking == null) return;
     try {
+      // stop updates
+      _locationUpdateTimer?.cancel();
       await _authService.firestore
           .collection('bookings')
           .doc(_acceptedBooking!['id'])
-          .update({'status': 'Completed'});
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RootPageRider()),);
+          .update({'status': 'Completed', 'active': 'false'});
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const RootPageRider()),
+      );
     } catch (e) {
-      debugPrint('Error completing ride: $e');
+      debugPrint('Error completing ride: £e');
     }
   }
 
@@ -208,8 +229,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     }
 
     final booking = _acceptedBooking!;
-    final GeoPoint pg = booking['pickUp'] as GeoPoint;
-    final GeoPoint dg = booking['dropOff'] as GeoPoint;
+    final GeoPoint pg = booking['pickUp'];
+    final GeoPoint dg = booking['dropOff'];
 
     final markers = <Marker>{
       Marker(
@@ -245,8 +266,6 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
             markers: markers,
             polylines: _polylines,
           ),
-
-          // bottom info card
           Align(
             alignment: Alignment.bottomCenter,
             child: Card(
@@ -259,7 +278,6 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // passenger/status
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -268,7 +286,6 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // datetime
                     Row(
                       children: [
                         Icon(Icons.access_time, color: theme.primaryColor),
@@ -277,14 +294,11 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // action buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () {
-                            print('Calling ${booking['phone']}');
-                          },
+                          onPressed: () => print('Calling ${booking['phone']}'),
                           icon: const Icon(Icons.phone),
                           label: Text(booking['phone']),
                         ),

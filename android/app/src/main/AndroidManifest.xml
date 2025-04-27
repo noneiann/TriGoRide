@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="tri_go_ride"
         android:name="${applicationName}"
@@ -35,6 +37,9 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyCdQSBnFQOwzzVj5tFiCHDgTWKYkILzb70"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="ride_channel" />
 
     </application>
     <!-- Required to query activities that can process text, see:

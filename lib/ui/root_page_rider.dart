@@ -4,6 +4,7 @@ import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_bookings.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_home_screen.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 
@@ -21,7 +22,7 @@ class _RootPageRiderState extends State<RootPageRider> {
     Icons.home,
     Icons.book,
     Icons.history,
-    Icons.feedback,
+    Icons.person,
   ];
 
   final List<String> _titleList = [
@@ -40,7 +41,7 @@ class _RootPageRiderState extends State<RootPageRider> {
       case 2:
         return const RideHistoryPage();
       case 3:
-        return const RiderFeedbacks();
+        return RiderProfile();
       default:
         return RiderHomeScreen();
     }

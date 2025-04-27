@@ -5,7 +5,7 @@ import 'package:tri_go_ride/ui/screens/passenger_side/book_ride.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_profile.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_ride_history.dart';
-import 'package:tri_go_ride/ui/splash_screen.dart';            // ← your splash/login
+import 'package:tri_go_ride/ui/login_screen.dart';            // ← your splash/login
 import '../../../services/auth_services.dart';                // ← AuthService
 
 class RootPagePassenger extends StatefulWidget {
@@ -69,7 +69,7 @@ class _RootPagePassengerState extends State<RootPagePassenger> {
               context,
               PageTransition(
                 type: PageTransitionType.fade,
-                child: const SplashScreen(),
+                child: const LoginPage(),
               ),
                   (route) => false,
             );
