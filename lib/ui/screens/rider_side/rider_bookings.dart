@@ -236,22 +236,10 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         'completedAt': Timestamp.now(),
       });
 
-      // Show rating dialog
       if (context.mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => EnhancedRatingDialog(
-            driverId: uid,
-            bookingId: _acceptedBooking!['id'],
-            onRatingComplete: () {
-              // Navigate back to root page after rating
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const RootPageRider()),
-              );
-            },
-          ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const RootPageRider()),
         );
       }
     } catch (e) {

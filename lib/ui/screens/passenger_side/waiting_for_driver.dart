@@ -115,16 +115,13 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   }
 
   void _checkAndShowRatingDialog(Map<String, dynamic> bookingData) {
-    // Check if this booking has already been rated
-    final bool hasRating = bookingData.containsKey('rating');
-
+    final hasRating = bookingData.containsKey('rating');
     if (!hasRating && mounted && _riderUid != null) {
-      // Use your existing RatingDialog widget
       Future.delayed(Duration.zero, () {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => EnhancedRatingDialog(
+          builder: (_) => EnhancedRatingDialog(
             driverId: _riderUid!,
             bookingId: widget.bookingId,
             onRatingComplete: _navigateToHome,
@@ -132,7 +129,6 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
         );
       });
     } else {
-      // Booking already has rating or missing driver ID, just go back to home
       _navigateToHome();
     }
   }
@@ -140,14 +136,14 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   void _navigateToDriverInfo() {
     if (_riderUid != null && mounted) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (context) => DriverInfoScreen(
-          driverId: _riderUid!,
-          bookingId: widget.bookingId,
-          pickUp: widget.pickUp,
-          dropOff: widget.dropOff,
-          driverLocation: _driverLocation, riderUid: '',
-        ),
-      ));
+             builder: (context) => DriverInfoScreen(
+               driverUid: _riderUid!,               // was driverId
+               bookingId: widget.bookingId,
+               pickUp: widget.pickUp,
+               dropOff: widget.dropOff,
+               initialDriverLocation: _driverLocation, // was driverLocation
+             ),
+     ));
     }
   }
 

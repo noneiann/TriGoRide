@@ -1,3 +1,5 @@
+// lib/ui/screens/passenger_side/driver_info.dart
+
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,18 +12,19 @@ import 'package:intl/intl.dart';
 import '../../../main.dart';
 
 class DriverInfoScreen extends StatefulWidget {
-  final String riderUid;
+  final String driverUid;
   final String bookingId;
-  final LatLng pickUp, dropOff;
+  final LatLng pickUp;
+  final LatLng dropOff;
   final LatLng? initialDriverLocation;
 
   const DriverInfoScreen({
     Key? key,
-    required this.riderUid,
+    required this.driverUid,
     required this.bookingId,
     required this.pickUp,
     required this.dropOff,
-    this.initialDriverLocation, LatLng? driverLocation, required String driverId,
+    this.initialDriverLocation,
   }) : super(key: key);
 
   @override
@@ -32,12 +35,15 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
   LatLng? _driverLocation;
   GoogleMapController? _mapController;
   late BitmapDescriptor _tricycleIcon;
-  late final StreamSubscription<DocumentSnapshot> _bookingSub;
+  late StreamSubscription<DocumentSnapshot> _bookingSub;
 
   @override
   void initState() {
     super.initState();
+    // start from any initial location you might have
+    _driverLocation = widget.initialDriverLocation;
     _loadTricycleIcon();
+    // listen to driverLocation updates on the booking doc
     _bookingSub = FirebaseFirestore.instance
         .collection('bookings')
         .doc(widget.bookingId)
@@ -45,25 +51,24 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         .listen(_onBookingUpdate);
   }
 
-  void _onBookingUpdate(DocumentSnapshot docSnap) {
-    if (!docSnap.exists) return;
-    final data = docSnap.data() as Map<String, dynamic>;
+  void _onBookingUpdate(DocumentSnapshot snap) {
+    if (!snap.exists) return;
+    final data = snap.data() as Map<String, dynamic>;
     final gp = data['driverLocation'] as GeoPoint?;
     if (gp != null) {
-      final newLoc = LatLng(gp.latitude, gp.longitude);
-      setState(() => _driverLocation = newLoc);
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLng(newLoc),
-      );
+      final loc = LatLng(gp.latitude, gp.longitude);
+      setState(() => _driverLocation = loc);
+      _mapController?.animateCamera(CameraUpdate.newLatLng(loc));
     }
   }
 
   Future<void> _loadTricycleIcon() async {
+    // Use fromAssetImage, not BitmapDescriptor.asset
     _tricycleIcon = await BitmapDescriptor.asset(
       const ImageConfiguration(size: Size(48, 48)),
-      'assets/icons/tricycle.png',
+      'assets/tricycle.png',
     );
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -75,6 +80,8 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // compute markers
     final markers = <Marker>{
       Marker(
         markerId: const MarkerId('pickup'),
@@ -88,58 +95,46 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         infoWindow: const InfoWindow(title: 'Drop-off'),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       ),
-      if (_driverLocation != null)
-        Marker(
-          markerId: const MarkerId('driver'),
-          position: _driverLocation!,
-          icon: _tricycleIcon,
-          infoWindow: const InfoWindow(title: 'Your Driver'),
-        ),
     };
+    if (_driverLocation != null) {
+      markers.add(Marker(
+        markerId: const MarkerId('driver'),
+        position: _driverLocation!,
+        icon: _tricycleIcon,
+        infoWindow: const InfoWindow(title: 'Driver'),
+      ));
+    }
 
+    // starting camera position
     final initialCenter = _driverLocation ?? widget.pickUp;
-    final initialZoom = _driverLocation != null ? 14.0 : 12.0;
+    final initialZoom = (_driverLocation != null) ? 14.0 : 12.0;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Driver on the Way'),
-      ),
+      appBar: AppBar(title: const Text('Driver on the Way')),
       body: Stack(
         children: [
-          // Full-screen map
-          Positioned.fill(
-            child: GoogleMap(
-              initialCameraPosition: CameraPosition(
-                target: initialCenter,
-                zoom: initialZoom,
-              ),
-              markers: markers,
-              onMapCreated: (c) => _mapController = c,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: false,
-            ),
+          GoogleMap(
+            initialCameraPosition:
+            CameraPosition(target: initialCenter, zoom: initialZoom),
+            markers: markers,
+            onMapCreated: (ctrl) => _mapController = ctrl,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
           ),
-          // Elevated info card at bottom
+          // driver info card
           FutureBuilder<QuerySnapshot>(
             future: FirebaseFirestore.instance
                 .collection('users')
-                .where('uid', isEqualTo: widget.riderUid)
+                .where('uid', isEqualTo: widget.driverUid)
                 .limit(1)
                 .get(),
             builder: (ctx, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
+              if (snap.connectionState != ConnectionState.done ||
+                  !snap.hasData ||
+                  snap.data!.docs.isEmpty) {
                 return const SizedBox();
               }
-              if (!snap.hasData || snap.data!.docs.isEmpty) {
-                return const SizedBox();
-              }
-
-              final doc = snap.data!.docs.first;
-              final d = doc.data() as Map<String, dynamic>;
-              final Timestamp? ts = d['createdAt'] as Timestamp?;
-              final String createdAt = ts != null
-                  ? DateFormat('MMM d, yyyy at h:mm:ss a').format(ts.toDate())
-                  : 'Unknown';
+              final d = snap.data!.docs.first.data() as Map<String, dynamic>;
 
               return Positioned(
                 left: 16,
@@ -148,10 +143,9 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                 child: Card(
                   elevation: 8,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                      borderRadius: BorderRadius.circular(16)),
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,25 +170,22 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                                 style: theme.textTheme.titleMedium,
                               ),
                             ),
-                            Icon(
-                              Icons.star,
-                              color: theme.colorScheme.secondary,
-                            ),
+                            Icon(Icons.star, color: theme.colorScheme.secondary),
                             const SizedBox(width: 4),
                             Text(
                               d['rating'] != null
                                   ? (d['rating'] as num).toStringAsFixed(1)
                                   : '-',
-                              style: theme.textTheme.titleSmall?.copyWith(
-                                color: theme.colorScheme.secondary,
-                              ),
+                              style: theme.textTheme.titleSmall
+                                  ?.copyWith(color: theme.colorScheme.secondary),
                             ),
                           ],
                         ),
                         const Divider(height: 24),
                         _buildInfoTile('Email', d['email'] ?? 'N/A', theme),
                         _buildInfoTile('Phone', d['phone'] ?? 'N/A', theme),
-                        _buildInfoTile('Plate Number', d['plateNumber'] ?? 'N/A', theme),
+                        _buildInfoTile(
+                            'Plate Number', d['plateNumber'] ?? 'N/A', theme),
                       ],
                     ),
                   ),
@@ -209,18 +200,14 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
 
   Widget _buildInfoTile(String label, String value, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium,
-          ),
+          Text(label,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600)),
+          Text(value, style: theme.textTheme.bodyMedium),
         ],
       ),
     );
