@@ -1,18 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloudinary_flutter/cloudinary_object.dart';
 import 'package:cloudinary_flutter/image/cld_image.dart';
 import 'package:cloudinary_url_gen/transformation/resize/resize.dart';
 import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloudinary_flutter/cloudinary_context.dart';
+import 'package:intl/intl.dart';
+import 'package:tri_go_ride/services/auth_services.dart';
+import 'package:tri_go_ride/ui/screens/notifs_page.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_settings.dart';
 
-import '../../../main.dart';
-import '../../../services/auth_services.dart';
+final CloudinaryObject cloudinary =
+CloudinaryObject.fromCloudName(cloudName: 'dm1zumkxl');
+
 class RiderHomeScreen extends StatefulWidget {
   const RiderHomeScreen({super.key});
 
@@ -25,41 +28,93 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   bool _loading = true;
   String name = '';
 
+  // notifications
+  bool _loadingNotifs = true;
+  List<Map<String, dynamic>> _notifications = [];
+
   final Map<String, Widget> screens = {
-    'Look for Passengers': PassengerSearchPage(),  // ← replace with your real search page
+    'Look for Passengers': PassengerSearchPage(),
     'Ride History': RideHistoryPage(),
     'Feedback': RiderFeedbacks(),
-    'Profile': RiderProfile(),               // ← replace with your settings page
+    'Profile': RiderProfile(),
   };
 
   @override
   void initState() {
     super.initState();
-    setName();
+    _loadNameAndNotifs();
   }
 
-   void setName() async {
-     final doc = await _authService.firestore
-         .collection("users")
-         .doc(_authService.getUser()?.email)
-         .get();
+  Future<void> _loadNameAndNotifs() async {
+    // 1️⃣ Load rider name
+    final user = _authService.getUser();
+    String fetchedName = 'Guest';
+    if (user?.email != null) {
+      final doc = await _authService.firestore
+          .collection("users")
+          .doc(user!.email)
+          .get();
+      fetchedName = doc.data()?['username'] as String? ?? 'Guest';
+    }
 
-     final fetched = doc.data()?['username'] as String? ?? 'Guest';
-     setState(() {
-       name = fetched;
-       _loading = false;
-     });
+    // 2️⃣ Load two most recent notifications
+    List<Map<String, dynamic>> notifs = [];
+    if (user?.email != null) {
+      final qs = await _authService.firestore
+          .collection('notifs')
+          .where('userId', isEqualTo: user!.email)
+          .orderBy('timestamp', descending: true)
+          .limit(2)
+          .get();
+      notifs = qs.docs.map((doc) {
+        final d = doc.data();
+        return {
+          'id': doc.id,
+          'message': d['message'] as String? ?? '',
+          'type': d['type'] as String? ?? 'system',
+          'timestamp': d['timestamp'] as Timestamp?,
+        };
+      }).toList();
+    }
+
+    setState(() {
+      name = fetchedName;
+      _notifications = notifs;
+      _loading = false;
+      _loadingNotifs = false;
+    });
+  }
+
+  String _formatTimestamp(Timestamp? ts) {
+    if (ts == null) return '';
+    return DateFormat('h:mm a').format(ts.toDate());
+  }
+
+  IconData _iconForNotificationType(String type) {
+    switch (type) {
+      case 'booking':
+        return Icons.motorcycle;
+      case 'booking_update':
+        return Icons.electric_rickshaw;
+      case 'payment':
+        return Icons.payment;
+      case 'promo':
+        return Icons.local_offer;
+      default:
+        return Icons.notifications;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
+      return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       body: Padding(
@@ -67,8 +122,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
         child: Column(
           children: [
             const SizedBox(height: 64),
-
-            // Header with profile image and greeting
+            // Header
             Container(
               height: 100,
               decoration: BoxDecoration(
@@ -83,12 +137,13 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                     children: [
                       ClipOval(
                         child: CldImageWidget(
-                            cloudinary: cloudinary,
-                            publicId: 'samples/look-up',
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            transformation: Transformation().addTransformation("ar_1.0,c_fill,w_100/r_max/f_png")
+                          cloudinary: cloudinary,
+                          publicId: 'samples/look-up',
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          transformation: Transformation()
+                              .addTransformation("ar_1.0,c_fill,w_100/r_max/f_png"),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -99,7 +154,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           Text(
                             'Hello, $name',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.textTheme.titleMedium?.color?.withOpacity(0.7),
+                              color: theme.textTheme.titleMedium
+                                  ?.color
+                                  ?.withOpacity(0.7),
                             ),
                           ),
                           Text(
@@ -111,16 +168,21 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                     ],
                   ),
                   IconButton(
-                    onPressed: () {Navigator.push(context, MaterialPageRoute(builder: (context) => RiderNotificationsPage()));},
-                    icon: Icon(Icons.notifications, size: 32, color: theme.iconTheme.color),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NotificationsPage()),
+                      );
+                    },
+                    icon: Icon(Icons.notifications,
+                        size: 32, color: theme.iconTheme.color),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 32),
-
-            // Prompt text
+            // Prompt
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -128,82 +190,62 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 style: theme.textTheme.titleMedium,
               ),
             ),
-
-
+            const SizedBox(height: 16),
             // Options grid
             GridView.count(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,         // a little less horizontal gap
-              mainAxisSpacing: 12,          // a little less vertical gap
-              childAspectRatio: 1.6,        // width : height ratio → 1:1 makes squarer, smaller cards
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.6,
               shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-
+              physics: const NeverScrollableScrollPhysics(),
               children: screens.entries.map((entry) {
                 return SizedBox(
-                  height: 100,               // lock in a max height for each cell
+                  height: 100,
                   child: _OptionCard(
                     icon: _iconForLabel(entry.key),
                     label: entry.key,
                     onTap: () {
-                      final page = screens[entry.key]!;
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => page),
+                        MaterialPageRoute(builder: (_) => entry.value),
                       );
                     },
                   ),
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 24),
-
-            // Card(
-            //   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            //   color: theme.primaryColor.withOpacity(0.1),
-            //   child: Padding(
-            //     padding: const EdgeInsets.all(16),
-            //     child: Row(
-            //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            //       children: [
-            //         Column(
-            //           crossAxisAlignment: CrossAxisAlignment.start,
-            //           children: [
-            //             Text('Today’s Trips', style: theme.textTheme.bodyMedium),
-            //             Text('3 Completed', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            //           ],
-            //         ),
-            //         Column(
-            //           crossAxisAlignment: CrossAxisAlignment.end,
-            //           children: [
-            //             Text('Earnings', style: theme.textTheme.bodyMedium),
-            //             Text('₱750.00', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            //           ],
-            //         ),
-            //       ],
-            //     ),
-            //   ),
-            // ),
-
-            const SizedBox(height: 24),
-
+            // Recent Activity
             Align(
               alignment: Alignment.centerLeft,
               child: Text('Recent Activity', style: theme.textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
-            ListTile(
-              leading: Icon(Icons.directions_bike, color: theme.primaryColor),
-              title: Text('Completed a ride to SM City', style: theme.textTheme.bodyMedium),
-              subtitle: Text('10 mins ago'),
-            ),
-            ListTile(
-              leading: Icon(Icons.attach_money, color: theme.primaryColor),
-              title: Text('You received ₱250 from Juan Dela Cruz', style: theme.textTheme.bodyMedium),
-              subtitle: Text('30 mins ago'),
-            ),
-
+            if (_loadingNotifs)
+              const Center(child: CircularProgressIndicator())
+            else if (_notifications.isEmpty)
+              Center(
+                child: Text(
+                  'No recent notifications',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              )
+            else
+              Column(
+                children: _notifications.map((n) {
+                  final ts = n['timestamp'] as Timestamp?;
+                  return ListTile(
+                    leading: Icon(
+                      _iconForNotificationType(n['type'] as String),
+                      color: Colors.orange,
+                    ),
+                    title: Text(n['message'] as String,
+                        style: theme.textTheme.bodyMedium),
+                    subtitle: Text(_formatTimestamp(ts)),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       ),
@@ -211,23 +253,18 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 }
 
-
-
 class _OptionCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-
   const _OptionCard({
     required this.icon,
     required this.label,
     required this.onTap,
   });
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 4,
@@ -242,11 +279,7 @@ class _OptionCard extends StatelessWidget {
             children: [
               Icon(icon, size: 32, color: theme.primaryColor),
               const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text(label, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
             ],
           ),
         ),

@@ -1,12 +1,14 @@
-import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+// lib/ui/screens/rider_side/rider_ride_history.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'package:tri_go_ride/services/auth_services.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
+
+import 'package:tri_go_ride/ui/screens/notifs_page.dart';
+
+import '../../booking_details.dart';
 
 class RideHistoryPage extends StatefulWidget {
   const RideHistoryPage({super.key});
@@ -26,9 +28,8 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
     _fetchRideHistory();
   }
 
-
   Future<void> _fetchRideHistory() async {
-    dotenv.load();
+    await dotenv.load();
 
     final currentRider = _authService.getUser()?.uid;
     if (currentRider == null) {
@@ -36,41 +37,44 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
       setState(() => _loading = false);
       return;
     }
-    debugPrint('ℹ️ Fetching ride history for rider UID: $currentRider');
 
     try {
-      final completedSnapshot = await _authService.firestore
+      final completedSnap = await _authService.firestore
           .collection('bookings')
           .where('assignedRider', isEqualTo: currentRider)
           .where('status', isEqualTo: 'Completed')
           .get();
-      debugPrint('✅ Completed rides: ${completedSnapshot.docs.length}');
-
-      final cancelledSnapshot = await _authService.firestore
+      final cancelledSnap = await _authService.firestore
           .collection('bookings')
           .where('assignedRider', isEqualTo: currentRider)
           .where('status', isEqualTo: 'Cancelled')
           .get();
-      debugPrint('✅ Cancelled rides: ${cancelledSnapshot.docs.length}');
 
-      final allRides = [
-        ...completedSnapshot.docs.map((d) => d.data()),
-        ...cancelledSnapshot.docs.map((d) => d.data()),
-      ];
-      debugPrint('🔀 Total rides before sorting: ${allRides.length}');
+      // Merge, preserving doc IDs
+      final all = <Map<String, dynamic>>[];
+      for (var doc in completedSnap.docs) {
+        final d = doc.data();
+        d['id'] = doc.id;
+        all.add(d);
+      }
+      for (var doc in cancelledSnap.docs) {
+        final d = doc.data();
+        d['id'] = doc.id;
+        all.add(d);
+      }
 
-      // sort by dateBooked descending
-      allRides.sort((a, b) {
+      // Sort by dateBooked descending
+      all.sort((a, b) {
         final aTime = (a['dateBooked'] as Timestamp).toDate();
         final bTime = (b['dateBooked'] as Timestamp).toDate();
         return bTime.compareTo(aTime);
       });
 
       setState(() {
-        _rideHistory = allRides;
+        _rideHistory = all;
         _loading = false;
       });
-      debugPrint('🏁 Finished fetching & geocoding ${_rideHistory.length} rides.');
+      debugPrint('🏁 Loaded ${_rideHistory.length} rides');
     } catch (e, st) {
       debugPrint('❌ Error fetching ride history: $e\n$st');
       setState(() => _loading = false);
@@ -89,15 +93,13 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.notifications),
             onPressed: () {
               Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const RiderNotificationsPage(),
-                ),
-              );
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const NotificationsPage()));
             },
-            icon: const Icon(Icons.notifications),
           )
         ],
         backgroundColor: theme.scaffoldBackgroundColor,
@@ -118,62 +120,87 @@ class _RideHistoryPageState extends State<RideHistoryPage> {
           itemCount: _rideHistory.length,
           itemBuilder: (context, index) {
             final ride = _rideHistory[index];
-            final destination =
+            final dropOffAddress =
                 ride['dropOffAddress'] as String? ??
                     'Unknown Destination';
-            final dateTime =
-            (ride['dateBooked'] as Timestamp).toDate();
-            final fare = ride['fare'] ?? 0.0;
-            final status = ride['status'] as String;
+            final dateTime = (ride['dateBooked'] as Timestamp)
+                .toDate();
+            final fare = ride['fare'] as num? ?? 0.0;
+            final status = ride['status'] as String? ?? '';
+            final bookingId = ride['id'] as String;
 
-            return Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 3,
-              margin: const EdgeInsets.only(bottom: 16),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      destination,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          DateFormat('MMM dd, yyyy – hh:mm a')
-                              .format(dateTime),
-                          style: theme.textTheme.bodySmall,
+            return InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        BookingDetailsPage(bookingId: bookingId),
+                  ),
+                );
+              },
+              child: Card(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 3,
+                margin:
+                const EdgeInsets.only(bottom: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        dropOffAddress,
+                        style: theme
+                            .textTheme.titleMedium
+                            ?.copyWith(
+                          fontWeight:
+                          FontWeight.bold,
                         ),
-                        Text(
-                          '₱${(fare as num).toStringAsFixed(2)}',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: theme.primaryColor,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat(
+                                'MMM dd, yyyy – hh:mm a')
+                                .format(dateTime),
+                            style: theme
+                                .textTheme.bodySmall,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      status,
-                      style: TextStyle(
-                        color: status == 'Completed'
-                            ? Colors.green
-                            : Colors.red,
-                        fontWeight: FontWeight.w500,
+                          Text(
+                            '₱${fare.toStringAsFixed(2)}',
+                            style: theme
+                                .textTheme.bodyMedium
+                                ?.copyWith(
+                              fontWeight:
+                              FontWeight.w600,
+                              color:
+                              theme.primaryColor,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        status,
+                        style: TextStyle(
+                          color: status ==
+                              'Completed'
+                              ? Colors.green
+                              : Colors.red,
+                          fontWeight:
+                          FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

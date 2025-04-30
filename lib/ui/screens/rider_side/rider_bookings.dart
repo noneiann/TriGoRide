@@ -1,13 +1,19 @@
+// Modified RiderBookingsPage class with rating integration
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:location/location.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:location/location.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
+
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../services/auth_services.dart';
+import '../passenger_side/rating_dialog.dart';
 
 class RiderBookingsPage extends StatefulWidget {
   const RiderBookingsPage({super.key});
@@ -53,7 +59,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
     if (_acceptedBooking != null) {
       await _getRoadPolylines();
-      _startLocationUpdates();  // begin sending location updates
+      _startLocationUpdates(); // begin sending location updates
     }
 
     setState(() => _loading = false);
@@ -65,7 +71,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         if (!await _location.requestService()) return;
       }
       if (await _location.hasPermission() == PermissionStatus.denied) {
-        if (await _location.requestPermission() != PermissionStatus.granted) return;
+        if (await _location.requestPermission() != PermissionStatus.granted)
+          return;
       }
       final loc = await _location.getLocation();
       _currentLatLng = LatLng(loc.latitude!, loc.longitude!);
@@ -88,19 +95,35 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         final doc = snap.docs.first;
         final d = doc.data();
 
-        final GeoPoint? pickupGP  = d['pickUp'] as GeoPoint?;
+        final String passengerName = d['passenger'] as String? ?? 'Unknown';
+        final String passengerId = d['passengerId'] as String? ?? '';
+
+        // Query users collection for this username
+        String phoneNumber = 'N/A';
+        final userQuery = await _authService.firestore
+            .collection('users')
+            .where('username', isEqualTo: passengerName)
+            .limit(1)
+            .get();
+        if (userQuery.docs.isNotEmpty) {
+          final userData = userQuery.docs.first.data();
+          phoneNumber = userData['phone'] as String? ?? phoneNumber;
+        }
+
+        final GeoPoint? pickupGP = d['pickUp'] as GeoPoint?;
         final GeoPoint? dropoffGP = d['dropOff'] as GeoPoint?;
-        final Timestamp? ts       = d['dateBooked'] as Timestamp?;
+        final Timestamp? ts = d['dateBooked'] as Timestamp?;
 
         if (pickupGP != null && dropoffGP != null && ts != null) {
           _acceptedBooking = {
-            'id'       : doc.id,
-            'passenger': d['passenger']?.toString() ?? 'Unknown',
-            'phone'    : d['phone']?.toString() ?? 'N/A',
-            'pickUp'   : pickupGP,
-            'dropOff'  : dropoffGP,
-            'datetime' : ts.toDate(),
-            'status'   : d['status']
+            'id': doc.id,
+            'passenger': passengerName,
+            'passengerId': passengerId,
+            'phone': phoneNumber,
+            'pickUp': pickupGP,
+            'dropOff': dropoffGP,
+            'datetime': ts.toDate(),
+            'status': d['status'] as String? ?? 'N/A',
           };
         }
       }
@@ -111,15 +134,18 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
   void _startLocationUpdates() {
     // send every 3 seconds
-    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      await _sendCurrentLocation();
-    });
+    _locationUpdateTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) async {
+          await _sendCurrentLocation();
+        });
   }
 
   Future<void> _sendCurrentLocation() async {
     try {
       final loc = await _location.getLocation();
-      if (loc.latitude != null && loc.longitude != null && _acceptedBooking != null) {
+      if (loc.latitude != null &&
+          loc.longitude != null &&
+          _acceptedBooking != null) {
         await _authService.firestore
             .collection('bookings')
             .doc(_acceptedBooking!['id'])
@@ -143,11 +169,15 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
     final result = await polylinePoints.getRouteBetweenCoordinates(
         googleApiKey: apiKey,
-        request: PolylineRequest(origin: PointLatLng(p.latitude, p.longitude), destination: PointLatLng(d.latitude, d.longitude), mode: TravelMode.driving,)
-    );
+        request: PolylineRequest(
+          origin: PointLatLng(p.latitude, p.longitude),
+          destination: PointLatLng(d.latitude, d.longitude),
+          mode: TravelMode.driving,
+        ));
 
     if (result.points.isNotEmpty) {
-      final route = result.points.map((pt) => LatLng(pt.latitude, pt.longitude)).toList();
+      final route =
+      result.points.map((pt) => LatLng(pt.latitude, pt.longitude)).toList();
 
       _polylines.add(Polyline(
         polylineId: const PolylineId('route'),
@@ -163,7 +193,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         );
       }
     } else {
-      debugPrint('Directions API returned no points: \${result.errorMessage}');
+      debugPrint('Directions API returned no points: ${result.errorMessage}');
     }
   }
 
@@ -180,21 +210,57 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     );
   }
 
+  // Modified complete ride function to include rating
   void _completeRide() async {
     if (_acceptedBooking == null) return;
+
     try {
-      // stop updates
+      // Stop location updates
       _locationUpdateTimer?.cancel();
+
+      final uid = _authService.getUser()?.uid;
+      if (uid == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not authenticated')),
+        );
+        return;
+      }
+
+      // Update booking status
       await _authService.firestore
           .collection('bookings')
           .doc(_acceptedBooking!['id'])
-          .update({'status': 'Completed', 'active': 'false'});
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const RootPageRider()),
-      );
+          .update({
+        'status': 'Completed',
+        'active': false,
+        'completedAt': Timestamp.now(),
+      });
+
+      // Show rating dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => EnhancedRatingDialog(
+            driverId: uid,
+            bookingId: _acceptedBooking!['id'],
+            onRatingComplete: () {
+              // Navigate back to root page after rating
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const RootPageRider()),
+              );
+            },
+          ),
+        );
+      }
     } catch (e) {
-      debugPrint('Error completing ride: £e');
+      debugPrint('Error completing ride: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
     }
   }
 
@@ -220,7 +286,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     if (_acceptedBooking == null) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('My Booking', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
+          title: const Text('My Booking',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
           backgroundColor: theme.scaffoldBackgroundColor,
           elevation: 0,
         ),
@@ -249,7 +316,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Booking', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
+        title: const Text('My Booking',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
       ),
@@ -270,7 +338,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
             alignment: Alignment.bottomCenter,
             child: Card(
               margin: const EdgeInsets.all(16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 4,
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -281,8 +350,13 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(booking['passenger'], style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                        Text(booking['status'], style: TextStyle(color: _statusColor(booking['status']), fontWeight: FontWeight.w600)),
+                        Text(booking['passenger'],
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold)),
+                        Text(booking['status'],
+                            style: TextStyle(
+                                color: _statusColor(booking['status']),
+                                fontWeight: FontWeight.w600)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -290,7 +364,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                       children: [
                         Icon(Icons.access_time, color: theme.primaryColor),
                         const SizedBox(width: 8),
-                        Text(DateFormat('MMM d, yyyy • h:mm a').format(booking['datetime'])),
+                        Text(DateFormat('MMM d, yyyy • h:mm a')
+                            .format(booking['datetime'])),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -298,9 +373,34 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         OutlinedButton.icon(
-                          onPressed: () => print('Calling ${booking['phone']}'),
+                          onPressed: () async {
+                            try {
+                              final phone = booking['phone'] as String? ?? '';
+                              final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
+
+                              if (cleanPhone.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('No phone number available')),
+                                );
+                                return;
+                              }
+
+                              final String urlString = 'tel:$cleanPhone';
+                              await launchUrl(
+                                Uri.parse(urlString),
+                                mode: LaunchMode.externalApplication,
+                              );
+                            } catch (e) {
+                              debugPrint('Phone call exception: $e');
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: $e')),
+                                );
+                              }
+                            }
+                          },
                           icon: const Icon(Icons.phone),
-                          label: Text(booking['phone']),
+                          label: Text(booking['phone'] ?? 'Call'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton.icon(

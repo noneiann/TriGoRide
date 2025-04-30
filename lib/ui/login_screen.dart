@@ -91,16 +91,19 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             // Fixed Logo Container - always at the top.
             Container(
-              padding: EdgeInsets.only(top: 96),
-              height: 100,
+              padding: const EdgeInsets.only(top: 60),
+              height: 240,  // bigger container
               alignment: Alignment.center,
-              child: Icon(
-                Icons.electric_rickshaw,
-                size: 100,
+              child: Image.asset(
+                'assets/TriGoRideLogo.png',
+                height: 240,  // set the image height
+                width: 240,   // (optional) set the image width
                 color: Colors.orange,
+                fit: BoxFit.contain,
               ),
             ),
-            SizedBox(height: 128),
+
+            SizedBox(height: 64),
             Container(
                 width: width,
                 padding: EdgeInsets.symmetric(horizontal: 32),

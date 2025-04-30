@@ -301,15 +301,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
             ),
 
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () async {
-                await NotiService().showNotification(
-                  title: 'Test Notification',
-                  body: 'This is a test notification',
-                );
-              },
-              child: Text('Test Notification'),
-            ),
+
             // Location selectors
             Card(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

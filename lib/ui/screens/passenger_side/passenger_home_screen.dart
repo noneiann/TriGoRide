@@ -7,6 +7,7 @@ import 'package:tri_go_ride/ui/login_screen.dart';
 
 import '../../../main.dart';
 import '../../../services/auth_services.dart';
+import '../notifs_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -122,7 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsPage())),
                     icon: Icon(Icons.notifications, size: 32, color: theme.iconTheme.color),
                   ),
                 ],

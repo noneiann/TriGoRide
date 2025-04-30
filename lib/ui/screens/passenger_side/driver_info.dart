@@ -21,7 +21,7 @@ class DriverInfoScreen extends StatefulWidget {
     required this.bookingId,
     required this.pickUp,
     required this.dropOff,
-    this.initialDriverLocation,
+    this.initialDriverLocation, LatLng? driverLocation, required String driverId,
   }) : super(key: key);
 
   @override

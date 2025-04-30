@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/services/auth_services.dart';
 
+import '../notifs_page.dart';
+
 class PassengerProfile extends StatelessWidget {
   final _users = AuthService().firestore.collection('users');
   final _uid   = AuthService().getUser()?.email;
@@ -19,9 +21,7 @@ class PassengerProfile extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              print('notifs pressed');
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsPage())),
             icon: Icon(Icons.notifications),
           )
         ],
