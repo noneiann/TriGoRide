@@ -8,8 +8,9 @@ import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
-
 import '../../../main.dart';
+import '../../root_page_passenger.dart';
+import '../passenger_side/rating_dialog.dart';
 
 class DriverInfoScreen extends StatefulWidget {
   final String driverUid;
@@ -36,14 +37,13 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
   GoogleMapController? _mapController;
   late BitmapDescriptor _tricycleIcon;
   late StreamSubscription<DocumentSnapshot> _bookingSub;
+  String? _lastStatus;
 
   @override
   void initState() {
     super.initState();
-    // start from any initial location you might have
     _driverLocation = widget.initialDriverLocation;
     _loadTricycleIcon();
-    // listen to driverLocation updates on the booking doc
     _bookingSub = FirebaseFirestore.instance
         .collection('bookings')
         .doc(widget.bookingId)
@@ -51,24 +51,48 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         .listen(_onBookingUpdate);
   }
 
+  Future<void> _loadTricycleIcon() async {
+    _tricycleIcon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(size: Size(48, 48)),
+      'assets/tricycle.png',
+    );
+    if (mounted) setState(() {});
+  }
+
   void _onBookingUpdate(DocumentSnapshot snap) {
     if (!snap.exists) return;
     final data = snap.data() as Map<String, dynamic>;
+
+    // 1) Show rating dialog when status flips to "Completed"
+    final status = data['status'] as String?;
+    if (status == 'Completed' && _lastStatus != 'Completed') {
+      Future.microtask(() {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => EnhancedRatingDialog(
+            driverId: widget.driverUid,
+            bookingId: widget.bookingId,
+            onRatingComplete: () {
+              Navigator.of(context).pop(); // dismiss dialog
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const RootPagePassenger()),
+                    (route) => false,
+              );
+            },
+          ),
+        );
+      });
+    }
+    _lastStatus = status;
+
+    // 2) Update and animate driver marker
     final gp = data['driverLocation'] as GeoPoint?;
     if (gp != null) {
       final loc = LatLng(gp.latitude, gp.longitude);
       setState(() => _driverLocation = loc);
       _mapController?.animateCamera(CameraUpdate.newLatLng(loc));
     }
-  }
-
-  Future<void> _loadTricycleIcon() async {
-    // Use fromAssetImage, not BitmapDescriptor.asset
-    _tricycleIcon = await BitmapDescriptor.asset(
-      const ImageConfiguration(size: Size(48, 48)),
-      'assets/tricycle.png',
-    );
-    if (mounted) setState(() {});
   }
 
   @override
@@ -81,7 +105,6 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // compute markers
     final markers = <Marker>{
       Marker(
         markerId: const MarkerId('pickup'),
@@ -101,11 +124,10 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         markerId: const MarkerId('driver'),
         position: _driverLocation!,
         icon: _tricycleIcon,
-        infoWindow: const InfoWindow(title: 'Driver'),
+        infoWindow: const InfoWindow(title: 'Your Driver'),
       ));
     }
 
-    // starting camera position
     final initialCenter = _driverLocation ?? widget.pickUp;
     final initialZoom = (_driverLocation != null) ? 14.0 : 12.0;
 
@@ -121,7 +143,7 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
           ),
-          // driver info card
+          // Driver info card
           FutureBuilder<QuerySnapshot>(
             future: FirebaseFirestore.instance
                 .collection('users')
@@ -135,7 +157,6 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                 return const SizedBox();
               }
               final d = snap.data!.docs.first.data() as Map<String, dynamic>;
-
               return Positioned(
                 left: 16,
                 right: 16,
@@ -145,10 +166,9 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
@@ -160,7 +180,8 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                                 height: 60,
                                 fit: BoxFit.cover,
                                 transformation: Transformation()
-                                  ..addTransformation('ar_1.0,c_fill,w_100/r_max/f_png'),
+                                  ..addTransformation(
+                                      'ar_1.0,c_fill,w_100/r_max/f_png'),
                               ),
                             ),
                             const SizedBox(width: 16),
@@ -170,14 +191,16 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                                 style: theme.textTheme.titleMedium,
                               ),
                             ),
-                            Icon(Icons.star, color: theme.colorScheme.secondary),
+                            Icon(Icons.star,
+                                color: theme.colorScheme.secondary),
                             const SizedBox(width: 4),
                             Text(
                               d['rating'] != null
                                   ? (d['rating'] as num).toStringAsFixed(1)
                                   : '-',
                               style: theme.textTheme.titleSmall
-                                  ?.copyWith(color: theme.colorScheme.secondary),
+                                  ?.copyWith(
+                                  color: theme.colorScheme.secondary),
                             ),
                           ],
                         ),
@@ -200,7 +223,7 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
 
   Widget _buildInfoTile(String label, String value, ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [

@@ -1,15 +1,15 @@
+// lib/ui/screens/rider_side/rider_home_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloudinary_flutter/cloudinary_object.dart';
 import 'package:cloudinary_flutter/image/cld_image.dart';
-import 'package:cloudinary_url_gen/transformation/resize/resize.dart';
 import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
-import 'package:cloudinary_flutter/cloudinary_context.dart';
 import 'package:intl/intl.dart';
 import 'package:tri_go_ride/services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/notifs_page.dart';
+import 'package:tri_go_ride/ui/screens/rider_side/driver_rating.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
 
@@ -25,19 +25,12 @@ class RiderHomeScreen extends StatefulWidget {
 
 class _RiderHomeScreenState extends State<RiderHomeScreen> {
   final AuthService _authService = AuthService();
-  bool _loading = true;
-  String name = '';
 
-  // notifications
+  bool _loading = true;
+  String _name = '';
+
   bool _loadingNotifs = true;
   List<Map<String, dynamic>> _notifications = [];
-
-  final Map<String, Widget> screens = {
-    'Look for Passengers': PassengerSearchPage(),
-    'Ride History': RideHistoryPage(),
-    'Feedback': RiderFeedbacks(),
-    'Profile': RiderProfile(),
-  };
 
   @override
   void initState() {
@@ -46,18 +39,17 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   }
 
   Future<void> _loadNameAndNotifs() async {
-    // 1️⃣ Load rider name
     final user = _authService.getUser();
     String fetchedName = 'Guest';
+
     if (user?.email != null) {
       final doc = await _authService.firestore
-          .collection("users")
+          .collection('users')
           .doc(user!.email)
           .get();
       fetchedName = doc.data()?['username'] as String? ?? 'Guest';
     }
 
-    // 2️⃣ Load two most recent notifications
     List<Map<String, dynamic>> notifs = [];
     if (user?.email != null) {
       final qs = await _authService.firestore
@@ -69,7 +61,6 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
       notifs = qs.docs.map((doc) {
         final d = doc.data();
         return {
-          'id': doc.id,
           'message': d['message'] as String? ?? '',
           'type': d['type'] as String? ?? 'system',
           'timestamp': d['timestamp'] as Timestamp?,
@@ -78,7 +69,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     }
 
     setState(() {
-      name = fetchedName;
+      _name = fetchedName;
       _notifications = notifs;
       _loading = false;
       _loadingNotifs = false;
@@ -105,6 +96,21 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     }
   }
 
+  IconData _iconForLabel(String label) {
+    switch (label) {
+      case 'Look for Passengers':
+        return Icons.search;
+      case 'Ride History':
+        return Icons.history;
+      case 'Feedback':
+        return Icons.feedback_rounded;
+      case 'Profile':
+        return Icons.person;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -114,7 +120,16 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     }
 
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+
+    // Build your screens map here, where you can safely reference _authService
+    final screens = {
+      'Look for Passengers': const PassengerSearchPage(),
+      'Ride History': const RideHistoryPage(),
+      'Feedback': DriverRatingDisplayPage(
+        driverId: _authService.getUser()!.uid,
+      ),
+      'Profile': RiderProfile(),
+    };
 
     return Scaffold(
       body: Padding(
@@ -143,7 +158,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           height: 80,
                           fit: BoxFit.cover,
                           transformation: Transformation()
-                              .addTransformation("ar_1.0,c_fill,w_100/r_max/f_png"),
+                            ..addTransformation(
+                                'ar_1.0,c_fill,w_100/r_max/f_png'),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -152,7 +168,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Hello, $name',
+                            'Hello, $_name',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: theme.textTheme.titleMedium
                                   ?.color
@@ -181,8 +197,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 ],
               ),
             ),
+
             const SizedBox(height: 32),
-            // Prompt
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -191,6 +207,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
             // Options grid
             GridView.count(
               crossAxisCount: 2,
@@ -200,28 +217,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: screens.entries.map((entry) {
-                return SizedBox(
-                  height: 100,
-                  child: _OptionCard(
-                    icon: _iconForLabel(entry.key),
-                    label: entry.key,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => entry.value),
-                      );
-                    },
-                  ),
+                return _OptionCard(
+                  icon: _iconForLabel(entry.key),
+                  label: entry.key,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => entry.value),
+                    );
+                  },
                 );
               }).toList(),
             ),
+
             const SizedBox(height: 24),
-            // Recent Activity
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Recent Activity', style: theme.textTheme.titleMedium),
+              child:
+              Text('Recent Activity', style: theme.textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
+
             if (_loadingNotifs)
               const Center(child: CircularProgressIndicator())
             else if (_notifications.isEmpty)
@@ -240,8 +256,8 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                       _iconForNotificationType(n['type'] as String),
                       color: Colors.orange,
                     ),
-                    title: Text(n['message'] as String,
-                        style: theme.textTheme.bodyMedium),
+                    title:
+                    Text(n['message'] as String, style: theme.textTheme.bodyMedium),
                     subtitle: Text(_formatTimestamp(ts)),
                   );
                 }).toList(),
@@ -279,26 +295,13 @@ class _OptionCard extends StatelessWidget {
             children: [
               Icon(icon, size: 32, color: theme.primaryColor),
               const SizedBox(height: 8),
-              Text(label, textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium),
             ],
           ),
         ),
       ),
     );
-  }
-}
-
-IconData _iconForLabel(String label) {
-  switch (label) {
-    case 'Look for Passengers':
-      return Icons.search;
-    case 'Ride History':
-      return Icons.history;
-    case 'Feedback':
-      return Icons.feedback_rounded;
-    case 'Profile':
-      return Icons.person;
-    default:
-      return Icons.help_outline;
   }
 }
