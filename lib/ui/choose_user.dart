@@ -14,22 +14,26 @@ class _ChooseUserState extends State<ChooseUser> {
 
   @override
   Widget build(BuildContext context) {
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final logoColor = isDark ? Colors.orange : Colors.black;
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             Container(
               padding: EdgeInsets.only(top: 96),
-              height: 100,
               alignment: Alignment.center,
-              child: Icon(
-                Icons.electric_rickshaw,
-                size: 100,
-                color: Colors.orange,
+              child: Image.asset(
+                'assets/TriGoRideLogo.png',
+                height: 240,
+                width: 240,
+                color: logoColor,
+                fit: BoxFit.contain,
               ),
             ),
-            SizedBox(height: 128+64,),
+
+
+            SizedBox(height: 100,),
             Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: 32),
@@ -61,7 +65,7 @@ class _ChooseUserState extends State<ChooseUser> {
                             ),
                             child: Center(
                               child: Text(
-                                'Rider',
+                                'Driver',
                                 style: TextStyle(
                                   fontSize: 20,
                                   color: Colors.white,

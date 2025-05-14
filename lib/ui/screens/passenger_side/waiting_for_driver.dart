@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:tflite_flutter/tflite_flutter.dart';
+
 import 'package:tri_go_ride/services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/rating_dialog.dart';
-
 import '../../root_page_passenger.dart';
-import 'driver_info.dart'; // Import your existing RatingDialog
+import 'driver_info.dart';
 
 class WaitingForDriverScreen extends StatefulWidget {
   final String bookingId;
@@ -27,6 +30,8 @@ class WaitingForDriverScreen extends StatefulWidget {
 class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   late final StreamSubscription<DocumentSnapshot> _bookingSub;
   late final AuthService _authService;
+  late final Interpreter _interpreter;
+
   String? _status;
   String? _riderUid;
   LatLng? _driverLocation;
@@ -37,7 +42,16 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   void initState() {
     super.initState();
     _authService = AuthService();
+    _loadModel();
+    // show initial loading
+    setState(() {
+      _status = 'Loading';
+    });
     _startBookingSubscription();
+  }
+
+  Future<void> _loadModel() async {
+    _interpreter = await Interpreter.fromAsset('assets/heuristic_model.tflite');
   }
 
   void _startBookingSubscription() {
@@ -55,7 +69,7 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   }
 
   void _scheduleRetry() {
-    if (_retryCount >= 5) return; // give up after 5 retries
+    if (_retryCount >= 5) return;
 
     _retryTimer = Timer(Duration(seconds: 3 * (_retryCount + 1)), () {
       _retryCount++;
@@ -66,7 +80,95 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
     });
   }
 
-  void _onBookingUpdate(DocumentSnapshot snapshot) {
+  Future<void> _assignBestDriver() async {
+    final driverDocs = await _authService.firestore
+        .collection('users')
+        .where('userType', isEqualTo: 'Driver')
+        .where('status', isEqualTo: 'available')
+        .get();
+    if (driverDocs.docs.isEmpty) {
+      await _authService.firestore
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .update({'status': 'Rejected'});
+      return;
+    }
+
+    List<String> driverIds = [];
+    List<double> ratings = [];
+    List<double> distances = [];
+
+    for (var doc in driverDocs.docs) {
+      final driverId = doc.data()['uid'];
+      final gp = doc.data()['location'] as GeoPoint;
+      final driverLoc = LatLng(gp.latitude, gp.longitude);
+
+      final ratingSnap = await _authService.firestore
+          .collection('ratings')
+          .where('driverId', isEqualTo: driverId)
+          .get();
+      final driverRatings = ratingSnap.docs
+          .map((d) => (d.data()['rating'] as num).toDouble())
+          .toList();
+      final avgRating = driverRatings.isEmpty
+          ? 3.0
+          : driverRatings.reduce((a, b) => a + b) / driverRatings.length;
+
+      final dist = Geolocator.distanceBetween(
+        widget.pickUp.latitude,
+        widget.pickUp.longitude,
+        driverLoc.latitude,
+        driverLoc.longitude,
+      );
+
+      driverIds.add(driverId);
+      ratings.add(avgRating);
+      distances.add(dist);
+    }
+
+    double minR = ratings.reduce(min);
+    double maxR = ratings.reduce(max);
+    double minD = distances.reduce(min);
+    double maxD = distances.reduce(max);
+
+    List<double> normR = ratings
+        .map((r) => (r - minR) / (maxR - minR + 1e-6))
+        .toList();
+    List<double> normD = distances
+        .map((d) => (d - minD) / (maxD - minD + 1e-6))
+        .toList();
+
+    double bestScore = -double.infinity;
+    String? bestDriver;
+
+    for (int i = 0; i < driverIds.length; i++) {
+      final input = [normR[i], normD[i]].reshape([1, 2]);
+      var output = List.filled(1, 0.0).reshape([1, 1]);
+      _interpreter.run([input], output);
+      final score = output[0][0];
+      if (score > bestScore) {
+        bestScore = score;
+        bestDriver = driverIds[i];
+      }
+    }
+    print('Best Driver: $bestDriver');
+    if (bestDriver != null) {
+      final declinedDrivers = driverIds.where((id) => id != bestDriver).toList();
+
+      await _authService.firestore
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .update({
+        'assignedRider': bestDriver,
+        'status': 'Pending',
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'declined_riders': declinedDrivers,
+      });
+    }
+
+  }
+
+  void _onBookingUpdate(DocumentSnapshot snapshot) async {
     if (!snapshot.exists) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Booking was deleted')),
@@ -77,40 +179,36 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
 
     final data = snapshot.data() as Map<String, dynamic>;
     final newStatus = data['status'] as String?;
-    final newRiderUid = data['assignedRider'] as String?;
-    final driverGP = data['driverLocation'] as GeoPoint?;
+    bool stateChanged = newStatus != _status;
+    _status = newStatus;
 
-    bool stateChanged = false;
-
-    if (newStatus != _status) {
-      _status = newStatus;
-      stateChanged = true;
+    if (_status == 'Pending') {
+      await _assignBestDriver();
     }
 
+    final newRiderUid = data['assignedRider'] as String?;
     if (newRiderUid != _riderUid) {
       _riderUid = newRiderUid;
       stateChanged = true;
     }
 
+    final driverGP = data['driverLocation'] as GeoPoint?;
     if (driverGP != null) {
-      final newDriverLoc = LatLng(driverGP.latitude, driverGP.longitude);
+      final newLoc = LatLng(driverGP.latitude, driverGP.longitude);
       if (_driverLocation == null ||
-          _driverLocation!.latitude != newDriverLoc.latitude ||
-          _driverLocation!.longitude != newDriverLoc.longitude) {
-        _driverLocation = newDriverLoc;
+          _driverLocation!.latitude != newLoc.latitude ||
+          _driverLocation!.longitude != newLoc.longitude) {
+        _driverLocation = newLoc;
         stateChanged = true;
       }
     }
 
-    // Check for "Completed" status to show rating dialog
+    if (stateChanged && mounted) setState(() {});
+
     if (_status == 'Completed') {
       _checkAndShowRatingDialog(data);
     } else if (_status == 'Accepted' && _riderUid != null) {
       _navigateToDriverInfo();
-    }
-
-    if (stateChanged && mounted) {
-      setState(() {});
     }
   }
 
@@ -135,22 +233,24 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
 
   void _navigateToDriverInfo() {
     if (_riderUid != null && mounted) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-             builder: (context) => DriverInfoScreen(
-               driverUid: _riderUid!,               // was driverId
-               bookingId: widget.bookingId,
-               pickUp: widget.pickUp,
-               dropOff: widget.dropOff,
-               initialDriverLocation: _driverLocation, // was driverLocation
-             ),
-     ));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => DriverInfoScreen(
+            driverUid: _riderUid!,
+            bookingId: widget.bookingId,
+            pickUp: widget.pickUp,
+            dropOff: widget.dropOff,
+            initialDriverLocation: _driverLocation,
+          ),
+        ),
+      );
     }
   }
 
   void _navigateToHome() {
     if (mounted) {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const RootPagePassenger()),
+        MaterialPageRoute(builder: (_) => const RootPagePassenger()),
             (route) => false,
       );
     }
@@ -158,7 +258,6 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
 
   void _cancelRide() async {
     try {
-      // Show confirmation dialog
       final bool? confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -180,7 +279,6 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
 
       if (confirm != true) return;
 
-      // Update booking status to cancelled
       await _authService.firestore
           .collection('bookings')
           .doc(widget.bookingId)
@@ -188,6 +286,7 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
         'status': 'Cancelled',
         'cancelledBy': 'passenger',
         'cancelledAt': Timestamp.now(),
+        'active': false,
       });
 
       if (mounted) {
@@ -216,7 +315,6 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Prevent back button from closing screen directly
         _cancelRide();
         return false;
       },
@@ -231,99 +329,63 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
         body: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_status == 'Pending') ...[
-              const Center(
-                child: CircularProgressIndicator(),
-              ),
+            if (_status == 'Loading') ...[
+              const Center(child: CircularProgressIndicator()),
               const SizedBox(height: 20),
-              const Text(
-                'Finding a driver...',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text('Connecting…', style: TextStyle(fontSize: 18)),
+            ] else if (_status == 'Pending') ...[
+              const Center(child: CircularProgressIndicator()),
+              const SizedBox(height: 20),
+              const Text('Finding a driver...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 30),
-                child: Text(
-                  'Please wait while we connect you with a nearby driver',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
-                ),
+                child: Text('Please wait while we connect you with a nearby driver', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 40),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: ElevatedButton(
                   onPressed: _cancelRide,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    minimumSize: const Size.fromHeight(50),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, minimumSize: const Size.fromHeight(50)),
                   child: const Text('CANCEL RIDE', style: TextStyle(fontSize: 16)),
                 ),
               ),
             ] else if (_status == 'Cancelled') ...[
-              const Icon(
-                Icons.cancel,
-                size: 80,
-                color: Colors.red,
-              ),
+              const Icon(Icons.cancel, size: 80, color: Colors.red),
               const SizedBox(height: 20),
-              const Text(
-                'Your ride has been cancelled',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text('Your ride has been cancelled', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 40),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: ElevatedButton(
                   onPressed: _navigateToHome,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                  ),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                   child: const Text('BACK TO HOME', style: TextStyle(fontSize: 16)),
                 ),
               ),
             ] else if (_status == 'Rejected') ...[
-              const Icon(
-                Icons.sentiment_dissatisfied,
-                size: 80,
-                color: Colors.orange,
-              ),
+              const Icon(Icons.sentiment_dissatisfied, size: 80, color: Colors.orange),
               const SizedBox(height: 20),
-              const Text(
-                'No drivers available at the moment',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text('No drivers available at the moment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 20),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 30),
-                child: Text(
-                  'Please try again in a few minutes',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
-                ),
+                child: Text('Please try again in a few minutes', textAlign: TextAlign.center, style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 40),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: ElevatedButton(
                   onPressed: _navigateToHome,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                  ),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                   child: const Text('BACK TO HOME', style: TextStyle(fontSize: 16)),
                 ),
               ),
             ] else if (_status == 'Accepted' && _riderUid == null) ...[
-              // Transitional state - driver accepted but details not loaded yet
-              const Center(
-                child: CircularProgressIndicator(),
-              ),
+              const Center(child: CircularProgressIndicator()),
               const SizedBox(height: 20),
-              const Text(
-                'Driver found! Loading details...',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
+              const Text('Driver found! Loading details...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ],
           ],
         ),

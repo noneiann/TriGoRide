@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
+import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
 import '../services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 
@@ -90,7 +91,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => HomeScreen()),
+                    MaterialPageRoute(builder: (_) => FirstTimeProfileSetup()),
                   );
                 },
                 child: Text("OK"),

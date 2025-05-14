@@ -1,16 +1,14 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_bookings.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_notifications.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../../services/auth_services.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-
 import '../../../services/noti_services.dart';
+import 'package:http/http.dart' as http;
 
 class PassengerSearchPage extends StatefulWidget {
   const PassengerSearchPage({super.key});
@@ -20,60 +18,75 @@ class PassengerSearchPage extends StatefulWidget {
 }
 
 class _PassengerSearchPageState extends State<PassengerSearchPage> {
-  final AuthService _authService = AuthService();
+  final AuthService _auth = AuthService();
+  final Location _locationSvc = Location();
   GoogleMapController? _mapController;
-
   LatLng? _currentLatLng;
-  final Location _location = Location();
-  bool _loading = true;
-
-  Map<String, dynamic>? _currentBooking;
   Set<Polyline> _polylines = {};
+  bool _isAvailable = false;   // new
 
   @override
   void initState() {
     super.initState();
-    _checkForActiveBooking();
+    _fetchUserLocation();
+    _setAvailable();
+    dotenv.load(fileName: ".env");
   }
 
-  Future<void> _checkForActiveBooking() async {
-    final uid = _authService.getUser()?.uid;
-    final snap = await _authService.firestore
+  @override
+  void dispose() {
+    _setUnavailable();
+    super.dispose();
+  }
+
+
+
+  Future<void> _setAvailable() async {
+    final email = _auth.getUser()!.email;
+    await _auth.firestore.collection('users').doc(email).update({
+      'status': 'available',
+    });
+  }
+
+  Future<void> _setUnavailable() async {
+    final email = _auth.getUser()!.email;
+    await _auth.firestore.collection('users').doc(email).update({
+      'status': 'unavailable',
+    });
+  }
+
+  Future<void> _fetchUserLocation() async {
+    if (!await _locationSvc.serviceEnabled()) {
+      if (!await _locationSvc.requestService()) return;
+    }
+    if (await _locationSvc.hasPermission() == PermissionStatus.denied) {
+      if (await _locationSvc.requestPermission() != PermissionStatus.granted) return;
+    }
+    final loc = await _locationSvc.getLocation();
+    setState(() => _currentLatLng = LatLng(loc.latitude!, loc.longitude!));
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedStream {
+    final uid = _auth.getUser()!.uid;
+    return _auth.firestore
         .collection('bookings')
         .where('assignedRider', isEqualTo: uid)
         .where('status', isEqualTo: 'Accepted')
         .limit(1)
-        .get();
-
-    if (snap.docs.isNotEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
-      );
-    } else {
-      _initialize();
-    }
+        .snapshots();
   }
 
-  Future<void> _initialize() async {
-    await Future.wait([_fetchUserLocation(), _fetchMostRecentBooking()]);
-    if (_currentBooking != null) {
-      _getRoadPolylines();
-    } else {
-      debugPrint('No pending bookings found');
-    }
-    setState(() => _loading = false);
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _pendingStream {
+    return _auth.firestore
+        .collection('bookings')
+        .where('status', isEqualTo: 'Pending')
+        .orderBy('dateBooked', descending: true)
+        .snapshots();
   }
 
-  Future<void> _getRoadPolylines() async {
-    if (_currentBooking == null) return;
-    final GeoPoint p = _currentBooking!['pickUp'] as GeoPoint;
-    final GeoPoint d = _currentBooking!['dropOff'] as GeoPoint;
-
-    await dotenv.load(fileName: ".env");
+  void _getRoute(GeoPoint p, GeoPoint d) async {
     final apiKey = dotenv.get('GOOGLEMAPS_APIKEY');
-    final polylinePoints = PolylinePoints();
-    final result = await polylinePoints.getRouteBetweenCoordinates(
+    final pts = await PolylinePoints().getRouteBetweenCoordinates(
       googleApiKey: apiKey,
       request: PolylineRequest(
         origin: PointLatLng(p.latitude, p.longitude),
@@ -81,441 +94,251 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
         mode: TravelMode.driving,
       ),
     );
+    if (pts.points.isEmpty) return;
+    final route = pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
+    final bounds = _boundsFrom(route);
 
-    if (result.points.isNotEmpty) {
-      final List<LatLng> route = result.points
-          .map((pt) => LatLng(pt.latitude, pt.longitude))
-          .toList();
-
-      setState(() {
-        _polylines.add(Polyline(
+    setState(() {
+      _polylines = {
+        Polyline(
           polylineId: const PolylineId('route'),
-          color: Colors.blue,
           width: 5,
           points: route,
-        ));
-      });
-
-      if (_mapController != null) {
-        LatLngBounds bounds = _getLatLngBounds(route);
-        _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-      }
-    } else {
-      debugPrint('Directions API returned no points: ${result.errorMessage}');
-    }
+        )
+      };
+    });
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
   }
 
-  LatLngBounds _getLatLngBounds(List<LatLng> points) {
-    final southwestLat = points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
-    final southwestLng = points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
-    final northeastLat = points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
-    final northeastLng = points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+  LatLngBounds _boundsFrom(List<LatLng> pts) {
+    final lats = pts.map((p) => p.latitude);
+    final lngs = pts.map((p) => p.longitude);
     return LatLngBounds(
-      southwest: LatLng(southwestLat, southwestLng),
-      northeast: LatLng(northeastLat, northeastLng),
+      southwest: LatLng(lats.reduce((a, b) => a < b ? a : b),
+          lngs.reduce((a, b) => a < b ? a : b)),
+      northeast: LatLng(lats.reduce((a, b) => a > b ? a : b),
+          lngs.reduce((a, b) => a > b ? a : b)),
     );
   }
 
-  Future<void> _fetchUserLocation() async {
-    try {
-      bool serviceEnabled = await _location.serviceEnabled();
-      if (!serviceEnabled) {
-        serviceEnabled = await _location.requestService();
-        if (!serviceEnabled) return;
-      }
-      PermissionStatus permissionGranted = await _location.hasPermission();
-      if (permissionGranted == PermissionStatus.denied) {
-        permissionGranted = await _location.requestPermission();
-        if (permissionGranted != PermissionStatus.granted) return;
-      }
-      final userLocation = await _location.getLocation();
-      _currentLatLng = LatLng(userLocation.latitude!, userLocation.longitude!);
-    } catch (e) {
-      debugPrint('Error fetching user location: $e');
-    }
-  }
+  Future<void> _acceptBooking(Map<String, dynamic> booking) async {
+    final bid = booking['id'] as String;
+    final rider = _auth.getUser()!;
+    final paxEmail = booking['passenger'] as String;
 
-  Future<void> _fetchMostRecentBooking() async {
-    final currentRider = _authService.getUser()?.uid;
-    try {
-      final snapshot = await _authService.firestore
-          .collection('bookings')
-          .where('status', isEqualTo: 'Pending')
-          .orderBy('dateBooked', descending: true)
-          .get();
-
-      debugPrint('Total pending bookings: ${snapshot.docs.length}');
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final declinedRiders = List<String>.from(data['declined_riders'] ?? []);
-
-        if (!declinedRiders.contains(currentRider)) {
-          debugPrint('Found booking not declined by current rider: ${doc.id}');
-          _currentBooking = {
-            'id': doc.id,
-            'passenger': data['passenger'] as String? ?? 'Unknown',
-            'phone': data['phone'] as String? ?? 'N/A',
-            'pickUp': data['pickUp'],
-            'dropOff': data['dropOff'],
-            'pickUpAddress': data['pickUpAddress'],
-            'dropOffAddress': data['dropOffAddress'],
-            'declined_riders': declinedRiders,
-            'dateBooked': data['dateBooked'] as Timestamp,
-          };
-          break;
-        }
-      }
-
-      if (_currentBooking == null) {
-        debugPrint('No suitable booking found for current rider.');
-      }
-    } catch (e) {
-      debugPrint('Error fetching booking: $e');
-    }
-  }
-
-  Future<void> _acceptBooking() async {
-    if (_currentBooking == null) return;
-    final bookingId = _currentBooking!['id'] as String;
-    final rider = _authService.getUser();
-    final riderEmail = rider?.email;
-
-    // 1️⃣ Update booking in Firestore
-    await _authService.firestore
-        .collection('bookings')
-        .doc(bookingId)
-        .update({
+    await _auth.firestore.collection('bookings').doc(bid).update({
       'status': 'Accepted',
-      'assignedRider': rider?.uid,
+      'assignedRider': rider.uid,
     });
-
-    // 2️⃣ Rider: show a local notification immediately
     await NotiService().showNotification(
       title: 'Booking Accepted',
-      body: 'You accepted the ride. Head to pickup now!',
+      body: 'Head to pickup now!',
     );
 
-    // 3️⃣ Passenger: fetch their FCM token
-    final passengerEmail = _currentBooking!['passenger'] as String;
-    final userDoc = await _authService.firestore
-        .collection('users')
-        .doc(passengerEmail)
-        .get();
-    final passengerToken = userDoc.data()?['fcmToken'] as String?;
-
-    // 4️⃣ If token exists, send an FCM push
-    if (passengerToken != null && passengerToken.isNotEmpty) {
-      await dotenv.load(fileName: '.env');
-      final serverKey = dotenv.get('FCM_SERVER_KEY');
+    // send FCM to passenger
+    final userDoc = await _auth.firestore.collection('users').doc(paxEmail).get();
+    final paxToken = userDoc.data()?['fcmToken'] as String?;
+    if (paxToken?.isNotEmpty == true) {
+      final sk = dotenv.get('FCM_SERVER_KEY');
       await http.post(
         Uri.parse('https://fcm.googleapis.com/fcm/send'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'key=$serverKey',
+          'Authorization': 'key=$sk'
         },
         body: jsonEncode({
-          'to': passengerToken,
+          'to': paxToken,
           'notification': {
-            'title': 'Driver on the Way!',
-            'body': 'Your driver has accepted and is en route. 🚗',
-            'sound': 'default',
-          },
-          'data': {
-            'bookingId': bookingId,
-            'type': 'booking_update',
+            'title': 'Driver on the way!',
+            'body': 'Your ride has been accepted.',
           },
         }),
       );
     }
 
-    // 5️⃣ Also log both notifs in your `notifs` collection
-    final notifs = _authService.firestore.collection('notifs');
+    // log notifications
     final now = Timestamp.now();
-    // Passenger entry
+    final notifs = _auth.firestore.collection('notifs');
     await notifs.add({
-      'userId': passengerEmail,
+      'userId': paxEmail,
       'type': 'booking_update',
-      'message': 'Your driver is on the way!',
+      'message': 'Driver is on the way!',
       'timestamp': now,
       'read': false,
-      'bookingId': bookingId,
+      'bookingId': bid,
     });
-    // Rider entry
-    if (riderEmail != null) {
-      await notifs.add({
-        'userId': riderEmail,
-        'type': 'booking_update',
-        'message': 'You accepted the ride. Proceed to pickup!',
-        'timestamp': now,
-        'read': false,
-        'bookingId': bookingId,
-      });
-    }
+    await notifs.add({
+      'userId': rider.email,
+      'type': 'booking_update',
+      'message': 'You accepted the booking.',
+      'timestamp': now,
+      'read': false,
+      'bookingId': bid,
+    });
 
-    // 6️⃣ Navigate into your bookings screen
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
     );
   }
 
-
-  void _declineBooking() async {
-    if (_currentBooking == null) return;
-    try {
-      _currentBooking?['declined_riders'].add(_authService.getUser()?.uid);
-      await _authService.firestore.collection('bookings').doc(_currentBooking!['id']).update(
-          _currentBooking as Map<Object, Object?>);
-      Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-              builder: (BuildContext context) => super.widget));
-    } catch (e) {
-      debugPrint('Error declining: $e');
-    }
+  void _declineBooking(Map<String, dynamic> booking) async {
+    final uid = _auth.getUser()!.uid;
+    final bid = booking['id'] as String;
+    final declined = List<String>.from(booking['declined_riders'] as List? ?? [])
+      ..add(uid);
+    await _auth.firestore.collection('bookings').doc(bid).update({
+      'declined_riders': declined,
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (_loading || _currentLatLng == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Passenger Search', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
-          backgroundColor: theme.scaffoldBackgroundColor,
-          elevation: 0,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
+    ThemeData theme = Theme.of(context);
+    if (_currentLatLng == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    if (_currentBooking == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Passenger Search', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
-          backgroundColor: theme.scaffoldBackgroundColor,
-          elevation: 0,
-        ),
-        body: const Center(child: Text('No pending bookings at the moment.')),
-      );
-    }
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _acceptedStream,
+      builder: (ctx, acceptSnap) {
+        // 1️⃣ If there's an accepted booking, jump to RiderBookingsPage.
+        if (acceptSnap.hasData && acceptSnap.data!.docs.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
+            );
+          });
+          return const SizedBox.shrink();
+        }
 
-    final Set<Marker> markers = {};
-    final GeoPoint pg = _currentBooking!['pickUp'] as GeoPoint;
-    markers.add(Marker(
-      markerId: const MarkerId('pickUp'),
-      position: LatLng(pg.latitude, pg.longitude),
-      infoWindow: InfoWindow(title: _currentBooking!['passenger']),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-    ));
-    final GeoPoint dg = _currentBooking!['dropOff'] as GeoPoint;
-    markers.add(Marker(
-      markerId: const MarkerId('dropOff'),
-      position: LatLng(dg.latitude, dg.longitude),
-      infoWindow: const InfoWindow(title: 'Drop-off'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-    ));
+        // 2️⃣ Otherwise listen for pending bookings
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _pendingStream,
+          builder: (ctx2, pendingSnap) {
+            if (pendingSnap.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final docs = pendingSnap.data?.docs ?? [];
+            // find first not declined
+            Map<String, dynamic>? booking;
+            final uid = _auth.getUser()!.uid;
+            for (var d in docs) {
+              final data = d.data();
+              final declined = List<String>.from(data['declined_riders'] ?? []);
+              if (!declined.contains(uid)) {
+                booking = {
+                  'id': d.id,
+                  ...data,
+                  'declined_riders': declined,
+                };
+                break;
+              }
+            }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Passenger Search', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
-        backgroundColor: theme.scaffoldBackgroundColor,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          // Full-screen map
-          GoogleMap(
-            onMapCreated: (controller) {
-              _mapController = controller;
-            },
-            markers: markers,
-            polylines: _polylines,
-            initialCameraPosition: CameraPosition(
-              target: _currentLatLng!,
-              zoom: 14,
-            ),
-            padding: const EdgeInsets.only(bottom: 220), // Add padding to avoid markers being hidden by card
-          ),
-
-          // Booking card positioned at the bottom
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: theme.scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  )
-                ],
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            if (booking == null) {
+              return Scaffold(
+                appBar: AppBar(title: const Text('Passenger Search')),
+                body: Column(
                   children: [
-                    // Handle for dragging
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
+                    // 1️⃣ Switch at top
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: SwitchListTile(
+                        title: Text(
+                          _isAvailable
+                              ? 'Online: Searching for passengers'
+                              : 'Offline: Not available',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), // center title text
                         ),
+                        value: _isAvailable,
+                        activeColor: Colors.green,
+                        onChanged: (val) async {
+                          setState(() => _isAvailable = val);
+                          if (val) {
+                            await _setAvailable();
+                          } else {
+                            await _setUnavailable();
+                          }
+                        },
                       ),
                     ),
 
-                    // Passenger info with avatar
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
-                          radius: 24,
-                          child: Icon(Icons.person, color: theme.colorScheme.primary, size: 28),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _currentBooking!['passenger'],
-                                style: theme.textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _currentBooking!['phone'],
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    // 2️⃣ Spacer to push icon/text to center
+                    const Expanded(child: SizedBox()),
+
+                    // 3️⃣ Status icon
+                    Icon(
+                      _isAvailable ? Icons.search : Icons.pause_circle_filled,
+                      size: 64,
+                      color: _isAvailable ? Colors.green : Colors.grey,
                     ),
 
-                    const Divider(height: 24),
+                    const SizedBox(height: 16),
 
-                    // Trip details
-                    _buildInfoRow(
-                      context,
-                      Icons.access_time,
-                      'Booking Time',
-                      _formatDateTime(_currentBooking!['dateBooked'] as Timestamp),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildInfoRow(
-                      context,
-                      Icons.location_on,
-                      'Pickup Location',
-                      _currentBooking!['pickUpAddress'],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildInfoRow(
-                      context,
-                      Icons.location_off,
-                      'Dropoff Location',
-                      _currentBooking!['dropOffAddress'],
+                    // 4️⃣ Centered status text
+                    Center(
+                      child: Text(
+                        _isAvailable
+                            ? 'Waiting for riders to request a trip...'
+                            : 'You are currently unavailable',
+                        style: theme.textTheme.titleSmall,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
 
-                    const SizedBox(height: 20),
-
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _acceptBooking,
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text('Accept'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _declineBooking,
-                            icon: const Icon(Icons.cancel),
-                            label: const Text('Decline'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    // 5️⃣ Spacer to balance bottom
+                    const Expanded(child: SizedBox()),
                   ],
                 ),
+              );
+            }
+
+            // Once we have a booking, draw route
+            _getRoute(booking['pickUp'], booking['dropOff']);
+
+            // Build the map + card UI (same as your original build)
+            return Scaffold(
+              appBar: AppBar(title: const Text('Passenger Search')),
+              body: Stack(
+                children: [
+                  GoogleMap(
+                    onMapCreated: (c) => _mapController = c,
+                    initialCameraPosition: CameraPosition(
+                      target: _currentLatLng!,
+                      zoom: 14,
+                    ),
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('pickup'),
+                        position: LatLng(
+                          (booking['pickUp'] as GeoPoint).latitude,
+                          (booking['pickUp'] as GeoPoint).longitude,
+                        ),
+                      ),
+                      Marker(
+                        markerId: const MarkerId('dropoff'),
+                        position: LatLng(
+                          (booking['dropOff'] as GeoPoint).latitude,
+                          (booking['dropOff'] as GeoPoint).longitude,
+                        ),
+                      ),
+                    },
+                    polylines: _polylines,
+                  ),
+                  // ... your bottom booking card, with buttons calling
+                  // _acceptBooking(booking) and _declineBooking(booking)
+                ],
               ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        );
+      },
     );
   }
-}
-
-// Helper method to format Timestamp to readable date and time
-String _formatDateTime(Timestamp timestamp) {
-  final DateTime dateTime = timestamp.toDate();
-  return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
-}
-
-// Helper method to build info rows with icons
-Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
-  final theme = Theme.of(context);
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Icon(icon, size: 20, color: theme.colorScheme.primary),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
 }

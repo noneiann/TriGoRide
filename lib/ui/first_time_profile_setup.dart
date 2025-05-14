@@ -1,31 +1,34 @@
 import 'dart:io';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:tri_go_ride/services/auth_services.dart';
 import 'package:tri_go_ride/services/cloudinary_service.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import 'dart:convert';
 
-class RiderProfile extends StatefulWidget {
-  const RiderProfile({super.key});
+class FirstTimeProfileSetup extends StatefulWidget {
+  const FirstTimeProfileSetup({super.key});
 
   @override
-  State<RiderProfile> createState() => _RiderProfileState();
+  State<FirstTimeProfileSetup> createState() => _FirstTimeProfileSetupState();
 }
 
-class _RiderProfileState extends State<RiderProfile> {
+class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
   final CollectionReference<Map<String, dynamic>> _users =
   AuthService().firestore.collection('users');
   final String _uid = AuthService().getUser()!.uid;
   final ImagePicker _picker = ImagePicker();
 
-  String? _localImageUrl;
+  String? _localImageUrl; // temporarily holds uploaded URL
 
   Future<void> _uploadAndSaveProfilePicture() async {
     final XFile? picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
 
+    // Call your reusable CloudinaryService
     final url = await CloudinaryService.uploadImage(File(picked.path));
     if (url == null) {
       ScaffoldMessenger.of(context)
@@ -33,8 +36,10 @@ class _RiderProfileState extends State<RiderProfile> {
       return;
     }
 
+    // Update local state to immediately preview
     setState(() => _localImageUrl = url['url']);
 
+    // Persist to Firestore
     final email = AuthService().getUser()?.email;
     if (email != null) {
       await _users.doc(email).update({'profileImage': url});
@@ -59,7 +64,8 @@ class _RiderProfileState extends State<RiderProfile> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Profile", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
+        title: const Text("Account Setup",
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w500)),
         backgroundColor: theme.scaffoldBackgroundColor,
         elevation: 0,
         actions: [
@@ -68,7 +74,8 @@ class _RiderProfileState extends State<RiderProfile> {
             tooltip: 'Logout',
             onPressed: () async {
               await AuthService().signOut();
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LoginPage()));
+              Navigator.pushReplacement(
+                  context, MaterialPageRoute(builder: (_) => LoginPage()));
             },
           ),
         ],
@@ -82,20 +89,32 @@ class _RiderProfileState extends State<RiderProfile> {
             }
             final data = snap.data?.data();
             if (data == null) return Center(child: Text(_uid));
+            final Map<String, dynamic> imageMap;
+            final String profileImage;
+            if (data['profileImage'] != null) {
+              imageMap = data['profileImage'] as Map<String, dynamic>;
+              profileImage = _localImageUrl ?? imageMap['url'];
+            } else {
+              profileImage = "https://res.cloudinary.com/dgu4lwrwn/image/upload/v1747147170/samples/logo.png";
+            }
 
-            final Map<String, dynamic>? imageMap = data['profileImage'];
-            final String profileImage = _localImageUrl ?? imageMap?['url'] ??
-                "https://res.cloudinary.com/dgu4lwrwn/image/upload/v1747147170/samples/logo.png";
+
 
             return ListView(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              padding:
+              const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               children: [
                 Center(
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 60,
-                        backgroundImage: NetworkImage(profileImage),
+                        backgroundImage: profileImage != null
+                            ? NetworkImage(profileImage)
+                            : null,
+                        child: profileImage == null
+                            ? const Icon(Icons.person, size: 60)
+                            : null,
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton.icon(
@@ -109,33 +128,44 @@ class _RiderProfileState extends State<RiderProfile> {
                 const SizedBox(height: 24),
                 InfoCard(
                   label: 'Name',
-                  content: Text(data['username'] ?? '', style: const TextStyle(fontSize: 16)),
-                  onEdit: () => _navigateToEdit(context, 'username', 'Name', data['username'] ?? ''),
+                  content: Text(data['username'] ?? '',
+                      style: const TextStyle(fontSize: 16)),
+                  onEdit: () => _navigateToEdit(
+                      context, 'username', 'Name', data['username'] ?? ''),
                 ),
                 const SizedBox(height: 12),
                 InfoCard(
                   label: 'Email',
-                  content: Text(data['email'] ?? '', style: const TextStyle(fontSize: 16)),
-                  onEdit: null,
-                ),
-                const SizedBox(height: 12),
-                InfoCard(
-                  label: 'Plate number',
-                  content: Text(data['plateNumber'] ?? '', style: const TextStyle(fontSize: 16)),
+                  content: Text(data['email'] ?? '',
+                      style: const TextStyle(fontSize: 16)),
                   onEdit: null,
                 ),
                 const SizedBox(height: 12),
                 InfoCard(
                   label: 'Mobile number',
-                  content: Text(data['phone'] ?? '', style: const TextStyle(fontSize: 16)),
-                  onEdit: () => _navigateToEdit(context, 'phone', 'Mobile number', data['phone'] ?? ''),
+                  content: Text(data['phone'] ?? '',
+                      style: const TextStyle(fontSize: 16)),
+                  onEdit: () => _navigateToEdit(
+                      context, 'phone', 'Mobile number', data['phone'] ?? ''),
+                ),
+                const SizedBox(height: 12),
+                InfoCard(
+                  label: 'Plate number',
+                  content: Text(data['plateNumber'] ?? '',
+                      style: const TextStyle(fontSize: 16)),
+                  onEdit: () => _navigateToEdit(
+                      context,
+                      'plateNumber',
+                      'Plate Number',
+                      data['plateNumber'] ?? ''),
                 ),
                 const SizedBox(height: 12),
                 InfoCard(
                   label: 'Password',
-                  content: const Text('••••••••', style: TextStyle(fontSize: 16)),
-                  onEdit: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const ChangePasswordPage())),
+                  content:
+                  const Text('••••••••', style: TextStyle(fontSize: 16)),
+                  onEdit: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ChangePasswordPage())),
                 ),
               ],
             );
@@ -144,7 +174,6 @@ class _RiderProfileState extends State<RiderProfile> {
       ),
     );
   }
-
 }
 
 class InfoCard extends StatelessWidget {

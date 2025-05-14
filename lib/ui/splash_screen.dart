@@ -46,7 +46,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // let the keyboard inset instead of disabling it
       resizeToAvoidBottomInset: true,
       body: FutureBuilder<Widget>(
         future: _startScreenFuture,

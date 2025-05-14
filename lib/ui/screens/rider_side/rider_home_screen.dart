@@ -12,9 +12,10 @@ import 'package:tri_go_ride/ui/screens/rider_side/driver_rating.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
+import 'package:tri_go_ride/services/cloudinary_service.dart';
 
 final CloudinaryObject cloudinary =
-CloudinaryObject.fromCloudName(cloudName: 'dm1zumkxl');
+CloudinaryObject.fromCloudName(cloudName: 'dgu4lwrwn');
 
 class RiderHomeScreen extends StatefulWidget {
   const RiderHomeScreen({super.key});
@@ -28,6 +29,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
   bool _loading = true;
   String _name = '';
+  String _profileId = '';
 
   bool _loadingNotifs = true;
   List<Map<String, dynamic>> _notifications = [];
@@ -41,13 +43,15 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
   Future<void> _loadNameAndNotifs() async {
     final user = _authService.getUser();
     String fetchedName = 'Guest';
-
+    String fetchedProfileId = '';
     if (user?.email != null) {
       final doc = await _authService.firestore
           .collection('users')
           .doc(user!.email)
           .get();
       fetchedName = doc.data()?['username'] as String? ?? 'Guest';
+      final profileImage = doc.data()?['profileImage'] as Map<String, dynamic>?;
+      fetchedProfileId = profileImage?['publicId'] as String? ?? '';
     }
 
     List<Map<String, dynamic>> notifs = [];
@@ -70,9 +74,11 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
     setState(() {
       _name = fetchedName;
+      _profileId = fetchedProfileId;
       _notifications = notifs;
       _loading = false;
       _loadingNotifs = false;
+      print( "Profile ID: " + _profileId);
     });
   }
 
@@ -153,7 +159,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                       ClipOval(
                         child: CldImageWidget(
                           cloudinary: cloudinary,
-                          publicId: 'samples/look-up',
+                          publicId: '$_profileId',
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,

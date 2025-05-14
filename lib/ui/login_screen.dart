@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
+import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
 import 'package:tri_go_ride/ui/root_page_passenger.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
 import '../services/auth_services.dart';
@@ -21,6 +22,7 @@ class _LoginPageState extends State<LoginPage> {
   String _error = '';
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
+
 
   Future<void> _login() async {
     setState(() => _loading = true);
@@ -46,13 +48,25 @@ class _LoginPageState extends State<LoginPage> {
               MaterialPageRoute(builder: (_) => RootPagePassenger()),
             );
           } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => RootPageRider()),
-            );
-            }
+            if (data["verified"] == false) {
+              showDialog(context: context, builder: (context) => AlertDialog(
+                title: Text("Driver not verified"),
+                content: Text("Please wait until the admin verifies your account!\n Would You like to setup your account?"),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: Text("No")),
+                  TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FirstTimeProfileSetup())), child: Text("Yes")),
+                  ])
+              );
+            } else {
 
-        } else{
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => RootPageRider()),
+              );
+            }
+          }
+
+        } else {
           showDialog(context: context, builder: (context) => AlertDialog(
             title: Text("User not found"),
             content: Text("No user exists in our database!"),

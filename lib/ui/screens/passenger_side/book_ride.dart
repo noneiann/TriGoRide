@@ -12,7 +12,7 @@ import 'package:tri_go_ride/services/noti_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/waiting_for_driver.dart';
 import '../../location_picker_screen.dart';
 
-/// Helper: fetch nearest place (name, vicinity) via Google Places Nearby Search
+
 Future<String?> getNearestPlace(double lat, double lng) async {
   await dotenv.load(fileName: ".env");
   final key = dotenv.get('GOOGLEMAPS_APIKEY');
@@ -21,7 +21,7 @@ Future<String?> getNearestPlace(double lat, double lng) async {
     return null;
   }
 
-  // Build URL
+
   final params = {
     'key'     : key,
     'location': '$lat,$lng',
@@ -36,11 +36,11 @@ Future<String?> getNearestPlace(double lat, double lng) async {
 
   debugPrint('🔗 Nearby Search URL:\n  $url');
 
-  // Fire the request
+
   final res = await http.get(url);
   debugPrint('📥 HTTP ${res.statusCode}');
 
-  // Log the first 1000 chars of the body so you can inspect status & results
+
   final bodySnippet = res.body.length > 1000
       ? res.body.substring(0, 1000) + '…'
       : res.body;
@@ -96,6 +96,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
   String? _pickUpAddress;
   String? _dropOffAddress;
   String? _passenger;
+  final serviceFee = 1.5;
 
   @override
   void initState() {
@@ -156,7 +157,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
   double get _estimatedFare {
     final raw = (_distanceKm / 2) * 15;
     final fare = raw < 15 ? 15 : raw;
-    return double.parse(fare.toStringAsFixed(2));
+    final finalFare = fare + serviceFee;
+    return double.parse(finalFare.toStringAsFixed(2));
   }
 
   Future<void> _selectLocation(bool isPickup) async {
@@ -347,7 +349,9 @@ class _BookRideScreenState extends State<BookRideScreen> {
                       Expanded(
                         child: Text(
                           'Distance: ${_distanceKm.toStringAsFixed(2)} km\n'
-                              'Fare: ₱${_estimatedFare.toStringAsFixed(2)}',
+                              'Service Fee: ₱${serviceFee.toStringAsFixed(2)}\n'
+                              'Fare: ₱${_estimatedFare.toStringAsFixed(2)}'
+                          ,
                           style: theme.textTheme.bodyMedium,
                         ),
                       ),

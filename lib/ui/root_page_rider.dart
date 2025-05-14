@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_bookings.dart';
-import 'package:tri_go_ride/ui/screens/rider_side/rider_feedbacks.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_home_screen.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
@@ -45,6 +44,8 @@ class _RootPageRiderState extends State<RootPageRider> {
       default:
         return RiderHomeScreen();
     }
+
+
   }
   Widget _buildPassengerSearch(){
     return PassengerSearchPage();

@@ -14,20 +14,18 @@ class AuthService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-  /// Safely return the current user, or null if none signed in.
+
   User? getUser() {
     return _auth.currentUser;
   }
 
   Future<void> initFCM() async {
-    // 1) request permissions
+
     await _fcm.requestPermission(alert: true, badge: true, sound: true);
 
-    // 2) get the FCM token
     final String? token = await _fcm.getToken();
     if (token == null) return;
 
-    // 3) only update Firestore if someone is actually signed in
     final user = getUser();
     if (user?.email != null) {
       await firestore.collection('users').doc(user!.email).update({
