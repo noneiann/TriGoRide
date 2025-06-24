@@ -70,6 +70,7 @@ class PassengerProfile extends StatelessWidget {
                   onEdit: () => _navigateToEdit(
                       context, 'phone', 'Mobile number', data['phone']),
                 ),
+                SizedBox(height: 12),
                 InfoCard(
                   label: 'Emergency Phone Number',
                   content: Text(data['emergencyNum'] ?? '',
