@@ -18,6 +18,8 @@ class PassengerSearchPage extends StatefulWidget {
 }
 
 class _PassengerSearchPageState extends State<PassengerSearchPage> {
+  String? _currentBookingId;            // ← track ID
+  Map<String,dynamic>? _currentBooking; // ← store the booking data
   final AuthService _auth = AuthService();
   final Location _locationSvc = Location();
   GoogleMapController? _mapController;
@@ -77,12 +79,16 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _pendingStream {
-    return _auth.firestore
+    var stream = _auth.firestore
         .collection('bookings')
         .where('status', isEqualTo: 'Pending')
         .orderBy('dateBooked', descending: true)
         .snapshots();
+    print(stream);
+    return stream;
   }
+
+
 
   void _getRoute(GeoPoint p, GeoPoint d) async {
     final apiKey = dotenv.get('GOOGLEMAPS_APIKEY');
@@ -194,6 +200,7 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
 
   @override
   Widget build(BuildContext context) {
+
     ThemeData theme = Theme.of(context);
     if (_currentLatLng == null) {
       return const Scaffold(
@@ -202,141 +209,178 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
     }
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _acceptedStream,
-      builder: (ctx, acceptSnap) {
-        // 1️⃣ If there's an accepted booking, jump to RiderBookingsPage.
-        if (acceptSnap.hasData && acceptSnap.data!.docs.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
-            );
-          });
-          return const SizedBox.shrink();
+      stream: _pendingStream,
+      builder: (ctx2, pendingSnap) {
+        if (pendingSnap.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final docs = pendingSnap.data?.docs ?? [];
+        final uid = _auth.getUser()!.uid;
+
+// Separate bookings into special and regular
+        final specialBookings = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        final regularBookings = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+        for (var d in docs) {
+          final data = d.data();
+          final declined = List<String>.from(data['declined_riders'] ?? []);
+          if (declined.contains(uid)) continue;
+
+          if (data['priorityType'] == 'special') {
+            specialBookings.add(d);
+          } else {
+            regularBookings.add(d);
+          }
         }
 
-        // 2️⃣ Otherwise listen for pending bookings
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _pendingStream,
-          builder: (ctx2, pendingSnap) {
-            if (pendingSnap.connectionState == ConnectionState.waiting) {
-              return const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final docs = pendingSnap.data?.docs ?? [];
-            // find first not declined
-            Map<String, dynamic>? booking;
-            final uid = _auth.getUser()!.uid;
-            for (var d in docs) {
-              final data = d.data();
-              final declined = List<String>.from(data['declined_riders'] ?? []);
-              if (!declined.contains(uid)) {
-                booking = {
-                  'id': d.id,
-                  ...data,
-                  'declined_riders': declined,
-                };
-                break;
-              }
-            }
+// Combine lists: special first
+        final prioritizedBookings = [...specialBookings, ...regularBookings];
 
-            if (booking == null) {
-              return Scaffold(
-                appBar: AppBar(title: const Text('Passenger Search')),
-                body: Column(
-                  children: [
-                    // 1️⃣ Switch at top
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: SwitchListTile(
-                        title: Text(
-                          _isAvailable
-                              ? 'Online: Searching for passengers'
-                              : 'Offline: Not available',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), // center title text
-                        ),
-                        value: _isAvailable,
-                        activeColor: Colors.green,
-                        onChanged: (val) async {
-                          setState(() => _isAvailable = val);
-                          if (val) {
-                            await _setAvailable();
-                          } else {
-                            await _setUnavailable();
-                          }
-                        },
-                      ),
+// Pick the first available booking
+        String? newId;
+        Map<String,dynamic>? newBooking;
+        if (prioritizedBookings.isNotEmpty) {
+          final b = prioritizedBookings.first;
+          newId = b.id;
+          newBooking = {
+            'id': newId,
+            ...b.data(),
+            'declined_riders': List<String>.from(b.data()['declined_riders'] ?? []),
+          };
+        }
+        if (newId != null && newId != _currentBookingId) {
+          _currentBookingId = newId;
+          _currentBooking = newBooking;
+
+          _getRoute(
+            _currentBooking!['pickUp'],
+            _currentBooking!['dropOff'],
+          );
+        }
+
+        if (_currentBooking == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Passenger Search')),
+            body: Column(
+              children: [
+                // 1️⃣ Switch at top
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: SwitchListTile(
+                    title: Text(
+                      _isAvailable
+                          ? 'Online: Searching for passengers'
+                          : 'Offline: Not available',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), // center title text
                     ),
-
-                    // 2️⃣ Spacer to push icon/text to center
-                    const Expanded(child: SizedBox()),
-
-                    // 3️⃣ Status icon
-                    Icon(
-                      _isAvailable ? Icons.search : Icons.pause_circle_filled,
-                      size: 64,
-                      color: _isAvailable ? Colors.green : Colors.grey,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 4️⃣ Centered status text
-                    Center(
-                      child: Text(
-                        _isAvailable
-                            ? 'Waiting for riders to request a trip...'
-                            : 'You are currently unavailable',
-                        style: theme.textTheme.titleSmall,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                    // 5️⃣ Spacer to balance bottom
-                    const Expanded(child: SizedBox()),
-                  ],
-                ),
-              );
-            }
-
-            // Once we have a booking, draw route
-            _getRoute(booking['pickUp'], booking['dropOff']);
-
-            // Build the map + card UI (same as your original build)
-            return Scaffold(
-              appBar: AppBar(title: const Text('Passenger Search')),
-              body: Stack(
-                children: [
-                  GoogleMap(
-                    onMapCreated: (c) => _mapController = c,
-                    initialCameraPosition: CameraPosition(
-                      target: _currentLatLng!,
-                      zoom: 14,
-                    ),
-                    markers: {
-                      Marker(
-                        markerId: const MarkerId('pickup'),
-                        position: LatLng(
-                          (booking['pickUp'] as GeoPoint).latitude,
-                          (booking['pickUp'] as GeoPoint).longitude,
-                        ),
-                      ),
-                      Marker(
-                        markerId: const MarkerId('dropoff'),
-                        position: LatLng(
-                          (booking['dropOff'] as GeoPoint).latitude,
-                          (booking['dropOff'] as GeoPoint).longitude,
-                        ),
-                      ),
+                    value: _isAvailable,
+                    activeColor: Colors.green,
+                    onChanged: (val) async {
+                      setState(() => _isAvailable = val);
+                      if (val) {
+                        await _setAvailable();
+                      } else {
+                        await _setUnavailable();
+                      }
                     },
-                    polylines: _polylines,
                   ),
-                  // ... your bottom booking card, with buttons calling
-                  // _acceptBooking(booking) and _declineBooking(booking)
-                ],
+                ),
+
+                // 2️⃣ Spacer to push icon/text to center
+                const Expanded(child: SizedBox()),
+
+                // 3️⃣ Status icon
+                Icon(
+                  _isAvailable ? Icons.search : Icons.pause_circle_filled,
+                  size: 64,
+                  color: _isAvailable ? Colors.green : Colors.grey,
+                ),
+
+                const SizedBox(height: 16),
+
+                // 4️⃣ Centered status text
+                Center(
+                  child: Text(
+                    _isAvailable
+                        ? 'Waiting for riders to request a trip...'
+                        : 'You are currently unavailable',
+                    style: theme.textTheme.titleSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
+                // 5️⃣ Spacer to balance bottom
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          );
+        }
+        // Build the map + card UI (same as your original build)
+        return Scaffold(
+          appBar: AppBar(title: const Text('Passenger Search')),
+          body: Stack(
+            children: [
+              GoogleMap(
+                onMapCreated: (c) => _mapController = c,
+                initialCameraPosition: CameraPosition(
+                  target: _currentLatLng!,
+                  zoom: 14,
+                ),
+                markers: {
+                  Marker(
+                    markerId: const MarkerId('pickup'),
+                    position: LatLng(
+                      (_currentBooking?['pickUp'] as GeoPoint).latitude,
+                      (_currentBooking?['pickUp'] as GeoPoint).longitude,
+                    ),
+                  ),
+                  Marker(
+                    markerId: const MarkerId('dropoff'),
+                    position: LatLng(
+                      (_currentBooking?['dropOff'] as GeoPoint).latitude,
+                      (_currentBooking?['dropOff'] as GeoPoint).longitude,
+                    ),
+                  ),
+                },
+                polylines: _polylines,
               ),
-            );
-          },
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Card(
+                  margin: const EdgeInsets.all(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Passenger: ${_currentBooking?['passenger']}', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        Text('Phone: ${_currentBooking?['phone']}', style: theme.textTheme.bodyMedium),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () => _declineBooking(_currentBooking!),
+                              child: const Text('Decline'),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              onPressed: () => _acceptBooking(_currentBooking!),
+                              child: const Text('Accept'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );

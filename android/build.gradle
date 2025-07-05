@@ -9,9 +9,18 @@ rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
-subprojects {
-    project.evaluationDependsOn(":app")
+
+subprojects { project ->
+    project.afterEvaluate {
+        if (project.name == "speech_to_text") {
+            // replace with a unique namespace
+            android {
+                namespace = "com.yourcompany.speech_to_text_plugin"
+            }
+        }
+    }
 }
+
 
 tasks.register("clean", Delete) {
     delete rootProject.buildDir

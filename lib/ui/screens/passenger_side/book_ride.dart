@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import 'package:tri_go_ride/services/auth_services.dart';
 import 'package:tri_go_ride/services/noti_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/waiting_for_driver.dart';
 import '../../location_picker_screen.dart';
+import '../../voice_hailing.dart';
 
 
 Future<String?> getNearestPlace(double lat, double lng) async {
@@ -98,11 +100,22 @@ class _BookRideScreenState extends State<BookRideScreen> {
   String? _pickUpAddress;
   String? _dropOffAddress;
   String? _passenger;
+  Set<Polyline> _polylines = {};
+  GoogleMapController? _mapController;
 
   String _selectedPriority = 'regular'; // Default option: 'regular' or 'special'
   final TextEditingController _specialAmountController = TextEditingController();
   double _enteredSpecialAmount = 0.0;
 
+  double _getZoomLevel() {
+    final d = _distanceKm;
+    if (d < 1) return 16;          // under 1 km
+    if (d < 5) return 14;          // 1–5 km
+    if (d < 10) return 13;         // 5–10 km
+    if (d < 20) return 12;         // 10–20 km
+    if (d < 50) return 10;         // 20–50 km
+    return 8;                      // farther out
+  }
 
   @override
   void initState() {
@@ -201,40 +214,96 @@ class _BookRideScreenState extends State<BookRideScreen> {
     return double.parse(totalFare.toStringAsFixed(2));
   }
 
-  Future<void> _selectLocation(bool isPickup) async {
-    final LatLng? chosen = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => LocationPickerScreen()),
+  Future<LatLng?> _getCoordinatesFromName(String name) async {
+    await dotenv.load(fileName: ".env");
+    final key = dotenv.get('GOOGLEMAPS_APIKEY');
+    final url = Uri.https('maps.googleapis.com', '/maps/api/place/textsearch/json', {
+      'key': key,
+      'query': name,
+    });
+    final res = await http.get(url);
+    if (res.statusCode != 200) return null;
+    final data = jsonDecode(res.body);
+    if ((data['results'] as List).isEmpty) return null;
+    final loc = data['results'][0]['geometry']['location'];
+    return LatLng(loc['lat'], loc['lng']);
+  }
+
+  /// Fetch route polyline between GeoPoints p and d
+  void _getRoute(GeoPoint p, GeoPoint d) async {
+    final apiKey = dotenv.get('GOOGLEMAPS_APIKEY');
+    final pts = await PolylinePoints().getRouteBetweenCoordinates(
+      googleApiKey: apiKey,
+      request: PolylineRequest(
+        origin: PointLatLng(p.latitude, p.longitude),
+        destination: PointLatLng(d.latitude, d.longitude),
+        mode: TravelMode.driving,
+      ),
     );
-    if (chosen == null) return;
-    if (!mounted) return;
+    if (pts.points.isEmpty) return;
+    final route = pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
+    final bounds = _boundsFrom(route);
 
     setState(() {
-      if (isPickup) {
-        _pickUp = chosen;
-        _pickUpAddress = 'Loading…';
-      } else {
-        _dropOff = chosen;
-        _dropOffAddress = 'Loading…';
-      }
+      _polylines = {
+        Polyline(
+          polylineId: const PolylineId('route'),
+          width: 5,
+          color: Theme.of(context).colorScheme.primary,
+          points: route,
+        )
+      };
     });
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+  }
 
-    try {
-      final addr = await getNearestPlace(chosen.latitude, chosen.longitude);
-      if (!mounted) return;
-      setState(() {
-        if (isPickup) _pickUpAddress = addr ?? '${chosen.latitude.toStringAsFixed(4)}, ${chosen.longitude.toStringAsFixed(4)}';
-        else           _dropOffAddress = addr ?? '${chosen.latitude.toStringAsFixed(4)}, ${chosen.longitude.toStringAsFixed(4)}';
-      });
-    } catch (e) {
-      debugPrint("Error getting nearest place: $e");
-      if (!mounted) return;
-      setState(() {
-        if (isPickup) _pickUpAddress = '${chosen.latitude.toStringAsFixed(4)}, ${chosen.longitude.toStringAsFixed(4)} (Error fetching name)';
-        else           _dropOffAddress = '${chosen.latitude.toStringAsFixed(4)}, ${chosen.longitude.toStringAsFixed(4)} (Error fetching name)';
-      });
+  LatLngBounds _boundsFrom(List<LatLng> pts) {
+    double? x0, x1, y0, y1;
+    for (var p in pts) {
+      if (x0 == null) {
+        x0 = x1 = p.latitude;
+        y0 = y1 = p.longitude;
+      } else {
+        if (p.latitude > x1!) x1 = p.latitude;
+        if (p.latitude < x0) x0 = p.latitude;
+        if (p.longitude > y1!) y1 = p.longitude;
+        if (p.longitude < y0!) y0 = p.longitude;
+      }
+    }
+    return LatLngBounds(southwest: LatLng(x0!, y0!), northeast: LatLng(x1!, y1!));
+  }
+  void _fitMapToMarkers() {
+    if (_pickUp == null || _dropOff == null || _mapController == null) return;
+
+    final bounds = _boundsFrom([_pickUp!, _dropOff!]);
+    // Animate with a 50px padding so markers aren’t at the very edge:
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+  }
+
+
+  Future<void> _selectLocation(bool isPickup) async {
+    final chosen = await Navigator.push(context, MaterialPageRoute(builder: (_) => LocationPickerScreen()));
+    if (chosen == null) return;
+    setState(() { if (isPickup) _pickUp = chosen; else _dropOff = chosen; _fitMapToMarkers(); });
+    final addr = await getNearestPlace(chosen.latitude, chosen.longitude);
+    setState(() { if (isPickup) _pickUpAddress = addr; else _dropOffAddress = addr; _fitMapToMarkers(); });
+    if (_pickUp != null && _dropOff != null) {
+      _getRoute(GeoPoint(_pickUp!.latitude, _pickUp!.longitude), GeoPoint(_dropOff!.latitude, _dropOff!.longitude));
     }
   }
+
+  Future<void> _startVoiceHailing() async {
+    final res = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const VoiceInputScreen()));
+    if (res == null) return;
+    final puName = res['pickup']!, doName = res['dropoff']!;
+    final pu = await _getCoordinatesFromName(puName);
+    final dof = await _getCoordinatesFromName(doName);
+    if (pu != null && dof != null) {
+      setState(() { _pickUp = pu; _dropOff = dof; _pickUpAddress = puName; _dropOffAddress = doName; _fitMapToMarkers(); });
+      _getRoute(GeoPoint(pu.latitude, pu.longitude), GeoPoint(dof.latitude, dof.longitude));
+    }
+  }
+
 
   Future<void> _bookRide() async {
     if (_pickUp == null || _dropOff == null || _passenger == null) {
@@ -359,26 +428,22 @@ class _BookRideScreenState extends State<BookRideScreen> {
                 height: 200,
                 child: showMap
                     ? GoogleMap(
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    _fitMapToMarkers();
+                  },
                   initialCameraPosition: CameraPosition(
                     target: LatLng(
                       (_pickUp!.latitude  + _dropOff!.latitude )/2,
                       (_pickUp!.longitude + _dropOff!.longitude)/2,
                     ),
-                    zoom: 13, // Adjust zoom dynamically based on distance?
+                    zoom: _getZoomLevel(), // Adjust zoom dynamically based on distance?
                   ),
                   markers: {
                     Marker(markerId: const MarkerId('pu'), position: _pickUp!),
                     Marker(markerId: const MarkerId('do'), position: _dropOff!),
                   },
-                  polylines: { // Optional: Show a line between pickup and dropoff
-                    if(showMap)
-                      Polyline(
-                        polylineId: const PolylineId("route"),
-                        points: [_pickUp!, _dropOff!],
-                        color: Colors.blue,
-                        width: 3,
-                      ),
-                  },
+                  polylines: _polylines,
                   zoomControlsEnabled: false,
                   scrollGesturesEnabled: false,
                   tiltGesturesEnabled: false,
@@ -535,8 +600,20 @@ class _BookRideScreenState extends State<BookRideScreen> {
                   ),
                 ),
               ),
-
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                  child: IconButton(
+                    iconSize: 48,
+                    icon: Icon(Icons.mic, color: theme.colorScheme.primary),
+                    onPressed: _startVoiceHailing,
+                    tooltip: 'Voice Hailing',
+                  ),
+                ),
+              ),
             const SizedBox(height: 100), // Space for bottom sheet
+
+
           ],
         ),
       ),
@@ -557,6 +634,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
       ),
     );
   }
+
+
 
   Widget _buildSummaryRow(ThemeData theme, String label, String value) {
     return Padding(
