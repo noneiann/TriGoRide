@@ -23,12 +23,10 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
 
-
   Future<void> _login() async {
     setState(() => _loading = true);
     CollectionReference<Map<String, dynamic>> users =
-    FirebaseFirestore.instance.collection('users');
-
+        FirebaseFirestore.instance.collection('users');
 
     try {
       User? user = await _authService.signIn(
@@ -38,46 +36,81 @@ class _LoginPageState extends State<LoginPage> {
       if (user != null) {
         // Navigate to Passenger home screen after successful login.
         DocumentSnapshot<Map<String, dynamic>> userSnapshot =
-        await users.doc(user.email).get();
+            await users.doc(user.email).get();
         if (userSnapshot.exists) {
           final data = userSnapshot.data()!;
 
-          if (data["userType"] == 'Passenger'){
+          if (data["userType"] == 'Passenger') {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (_) => RootPagePassenger()),
             );
           } else {
             if (data["verified"] == false) {
-              showDialog(context: context, builder: (context) => AlertDialog(
-                title: Text("Driver not verified"),
-                content: Text("Please wait until the admin verifies your account!\n Would You like to setup your account?"),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: Text("No")),
-                  TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FirstTimeProfileSetup())), child: Text("Yes")),
-                  ])
-              );
+              showDialog(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                          title: Text("Driver not verified"),
+                          content: Text(
+                              "Please wait until the admin verifies your account!\n Would You like to setup your account?"),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text("No")),
+                            TextButton(
+                                onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            FirstTimeProfileSetup())),
+                                child: Text("Yes")),
+                          ]));
             } else {
-
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => RootPageRider()),
               );
             }
           }
-
         } else {
-          showDialog(context: context, builder: (context) => AlertDialog(
-            title: Text("User not found"),
-            content: Text("No user exists in our database!"),
-            actions: [
-              TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Okay'))
-            ],
-          ));
+          showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: Text("User not found"),
+                    content: Text("No user exists in our database!"),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text('Okay'))
+                    ],
+                  ));
         }
       }
     } catch (e) {
-      setState(() => _error = 'Login failed: ${e.toString()}');
+      String errorMessage = 'Login failed';
+
+      // Parse Firebase auth errors
+      if (e.toString().contains('user-not-found')) {
+        errorMessage = 'No account found with this email address.';
+      } else if (e.toString().contains('wrong-password')) {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Invalid email address format.';
+      } else if (e.toString().contains('user-disabled')) {
+        errorMessage = 'This account has been disabled.';
+      } else if (e.toString().contains('too-many-requests')) {
+        errorMessage =
+            'Too many failed login attempts. Please try again later.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('invalid-credential')) {
+        errorMessage =
+            'Invalid email or password. Please check your credentials.';
+      } else {
+        errorMessage = 'Login failed. Please try again.';
+      }
+
+      setState(() => _error = errorMessage);
     } finally {
       setState(() => _loading = false);
     }
@@ -106,12 +139,12 @@ class _LoginPageState extends State<LoginPage> {
             // Fixed Logo Container - always at the top.
             Container(
               padding: const EdgeInsets.only(top: 60),
-              height: 240,  // bigger container
+              height: 240, // bigger container
               alignment: Alignment.center,
               child: Image.asset(
                 'assets/TriGoRideLogo.png',
-                height: 240,  // set the image height
-                width: 240,   // (optional) set the image width
+                height: 240, // set the image height
+                width: 240, // (optional) set the image width
                 color: Colors.orange,
                 fit: BoxFit.contain,
               ),
@@ -136,8 +169,7 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     Text("Please login to continue"),
                   ],
-                )
-            ),
+                )),
             SizedBox(height: 40),
             // The rest of the login UI.
             Center(
@@ -234,15 +266,15 @@ class _LoginPageState extends State<LoginPage> {
                     _loading
                         ? CircularProgressIndicator()
                         : ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text("Login"),
-                    ),
+                            onPressed: _login,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Text("Login"),
+                          ),
                     SizedBox(height: 10),
                     // Navigation to registration.
                     TextButton(

@@ -10,7 +10,7 @@
 
 
     <application
-        android:label="tri_go_ride"
+        android:label="TriGoRide"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

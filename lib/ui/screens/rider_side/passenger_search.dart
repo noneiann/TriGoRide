@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
@@ -18,43 +21,122 @@ class PassengerSearchPage extends StatefulWidget {
 }
 
 class _PassengerSearchPageState extends State<PassengerSearchPage> {
-  String? _currentBookingId;            // ← track ID
-  Map<String,dynamic>? _currentBooking; // ← store the booking data
+  String? _currentBookingId; // ← track ID
+  Map<String, dynamic>? _currentBooking; // ← store the booking data
   final AuthService _auth = AuthService();
   final Location _locationSvc = Location();
+  final DatabaseReference _realtimeDb = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL:
+        'https://trigoride-ee892-default-rtdb.asia-southeast1.firebasedatabase.app',
+  ).ref();
   GoogleMapController? _mapController;
   LatLng? _currentLatLng;
   Set<Polyline> _polylines = {};
-  bool _isAvailable = false;   // new
+  bool _isAvailable = false; // new
+  Timer? _locationBroadcastTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchUserLocation();
-    _setAvailable();
+    // Don't auto-start as available - let driver toggle
     dotenv.load(fileName: ".env");
   }
 
   @override
   void dispose() {
     _setUnavailable();
+    _locationBroadcastTimer?.cancel();
     super.dispose();
   }
 
-
-
   Future<void> _setAvailable() async {
     final email = _auth.getUser()!.email;
+
+    print('🟢 Setting driver available: $email');
+
+    // Ensure we have location before going available
+    if (_currentLatLng == null) {
+      print('📍 Fetching initial location...');
+      await _fetchUserLocation();
+    }
+
+    if (_currentLatLng != null) {
+      print(
+          '✅ Location ready: ${_currentLatLng!.latitude}, ${_currentLatLng!.longitude}');
+    } else {
+      print('❌ Failed to get location');
+    }
+
     await _auth.firestore.collection('users').doc(email).update({
       'status': 'available',
+    });
+
+    print('✅ Firestore status updated to available');
+
+    // Start broadcasting location to Realtime Database
+    _startLocationBroadcast();
+  }
+
+  void _startLocationBroadcast() {
+    final uid = _auth.getUser()!.uid;
+
+    print('🔥 Starting location broadcast for driver: $uid');
+
+    // Broadcast location every 3 seconds to Realtime Database
+    _locationBroadcastTimer =
+        Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        // Get fresh location without triggering setState (no UI rebuild)
+        final loc = await _locationSvc.getLocation();
+        final currentLat = loc.latitude;
+        final currentLng = loc.longitude;
+
+        if (currentLat != null && currentLng != null) {
+          // Update internal state without rebuilding UI
+          _currentLatLng = LatLng(currentLat, currentLng);
+
+          print('📍 Broadcasting location: $currentLat, $currentLng');
+
+          // Update location in Realtime Database (much faster than Firestore)
+          await _realtimeDb.child('driver_locations').child(uid).set({
+            'uid': uid,
+            'latitude': currentLat,
+            'longitude': currentLng,
+            'timestamp': ServerValue.timestamp,
+            'status': 'available',
+          });
+
+          print('✅ Location broadcast successful');
+        } else {
+          print('⚠️ No current location to broadcast');
+        }
+      } catch (e) {
+        print('❌ Error broadcasting location: $e');
+      }
     });
   }
 
   Future<void> _setUnavailable() async {
     final email = _auth.getUser()!.email;
+    final uid = _auth.getUser()!.uid;
+
+    print('🔴 Setting driver unavailable: $email');
+
+    _locationBroadcastTimer?.cancel();
+
     await _auth.firestore.collection('users').doc(email).update({
       'status': 'unavailable',
     });
+
+    // Remove from Realtime Database
+    try {
+      await _realtimeDb.child('driver_locations').child(uid).remove();
+      print('✅ Removed from Realtime Database');
+    } catch (e) {
+      print('❌ Error removing from Realtime Database: $e');
+    }
   }
 
   Future<void> _fetchUserLocation() async {
@@ -62,20 +144,11 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
       if (!await _locationSvc.requestService()) return;
     }
     if (await _locationSvc.hasPermission() == PermissionStatus.denied) {
-      if (await _locationSvc.requestPermission() != PermissionStatus.granted) return;
+      if (await _locationSvc.requestPermission() != PermissionStatus.granted)
+        return;
     }
     final loc = await _locationSvc.getLocation();
     setState(() => _currentLatLng = LatLng(loc.latitude!, loc.longitude!));
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> get _acceptedStream {
-    final uid = _auth.getUser()!.uid;
-    return _auth.firestore
-        .collection('bookings')
-        .where('assignedRider', isEqualTo: uid)
-        .where('status', isEqualTo: 'Accepted')
-        .limit(1)
-        .snapshots();
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _pendingStream {
@@ -88,8 +161,6 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
     return stream;
   }
 
-
-
   void _getRoute(GeoPoint p, GeoPoint d) async {
     final apiKey = dotenv.get('GOOGLEMAPS_APIKEY');
     final pts = await PolylinePoints().getRouteBetweenCoordinates(
@@ -101,7 +172,8 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
       ),
     );
     if (pts.points.isEmpty) return;
-    final route = pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
+    final route =
+        pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
     final bounds = _boundsFrom(route);
 
     setState(() {
@@ -110,10 +182,16 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
           polylineId: const PolylineId('route'),
           width: 5,
           points: route,
+          color: Colors.blue,
         )
       };
     });
-    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
+
+    // Wait for map to be ready and then animate camera
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (_mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+    }
   }
 
   LatLngBounds _boundsFrom(List<LatLng> pts) {
@@ -130,39 +208,74 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
   Future<void> _acceptBooking(Map<String, dynamic> booking) async {
     final bid = booking['id'] as String;
     final rider = _auth.getUser()!;
-    final paxEmail = booking['passenger'] as String;
+    final paxName = booking['passenger'] as String;
 
+    // Update booking status and assign rider
     await _auth.firestore.collection('bookings').doc(bid).update({
       'status': 'Accepted',
       'assignedRider': rider.uid,
     });
+
+    // Local notification for rider
     await NotiService().showNotification(
       title: 'Booking Accepted',
       body: 'Head to pickup now!',
     );
 
-    // send FCM to passenger
-    final userDoc = await _auth.firestore.collection('users').doc(paxEmail).get();
-    final paxToken = userDoc.data()?['fcmToken'] as String?;
+    // 🔹 Get passenger document
+    final userQuery = await _auth.firestore
+        .collection('users')
+        .where('username', isEqualTo: paxName)
+        .get();
+
+    if (userQuery.docs.isEmpty) {
+      print('⚠️ No passenger found with name: $paxName');
+    }
+
+    final userDoc = userQuery.docs.first;
+    final paxToken = userDoc.data()['fcmToken'] as String?;
+    final paxPhone = userDoc.data()['phone'] as String?;
+    final paxUsername = userDoc.data()['username'] as String? ?? 'Passenger';
+    final paxEmail = userDoc.data()['email'] as String? ?? 'unknown_user';
+
+    // 🔹 Get driver name
+    final driverDoc =
+        await _auth.firestore.collection('users').doc(rider.email).get();
+    final driverName = driverDoc.data()?['username'] as String? ?? 'Driver';
+
+    final pickupAddress =
+        booking['pickUpAddress'] as String? ?? 'Your location';
+
+    // 🔹 Send FCM notification to passenger
     if (paxToken?.isNotEmpty == true) {
       final sk = dotenv.get('FCM_SERVER_KEY');
       await http.post(
         Uri.parse('https://fcm.googleapis.com/fcm/send'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'key=$sk'
+          'Authorization': 'key=$sk',
         },
         body: jsonEncode({
           'to': paxToken,
           'notification': {
             'title': 'Driver on the way!',
-            'body': 'Your ride has been accepted.',
+            'body': 'Your ride has been accepted by $driverName.',
           },
         }),
       );
     }
 
-    // log notifications
+    // 🔹 Send SMS notification to passenger
+    if (paxPhone?.isNotEmpty == true) {
+      await NotiService().sendBookingAcceptedSMS(
+        passengerPhone: paxPhone!,
+        passengerName: paxUsername,
+        driverName: driverName,
+        pickupLocation: pickupAddress,
+      );
+    }
+
+    // 🔹 Log notifications in Firestore
     final now = Timestamp.now();
     final notifs = _auth.firestore.collection('notifs');
     await notifs.add({
@@ -182,25 +295,60 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
       'bookingId': bid,
     });
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
-    );
+    // 🔹 Navigate to rider bookings page
+    if (context.mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const RiderBookingsPage()),
+      );
+    }
   }
 
   void _declineBooking(Map<String, dynamic> booking) async {
     final uid = _auth.getUser()!.uid;
     final bid = booking['id'] as String;
-    final declined = List<String>.from(booking['declined_riders'] as List? ?? [])
-      ..add(uid);
+    final declined =
+        List<String>.from(booking['declined_riders'] as List? ?? [])..add(uid);
+
     await _auth.firestore.collection('bookings').doc(bid).update({
       'declined_riders': declined,
     });
+
+    // Clear the current booking from UI so it disappears
+    setState(() {
+      _currentBooking = null;
+      _currentBookingId = null;
+      _polylines.clear();
+    });
+
+    print('✅ Booking declined, UI updated');
+  }
+
+  Widget _buildInfoRow(
+      IconData icon, String label, String value, ThemeData theme) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: theme.primaryColor),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: theme.textTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-
     ThemeData theme = Theme.of(context);
     if (_currentLatLng == null) {
       return const Scaffold(
@@ -240,14 +388,15 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
 
 // Pick the first available booking
         String? newId;
-        Map<String,dynamic>? newBooking;
+        Map<String, dynamic>? newBooking;
         if (prioritizedBookings.isNotEmpty) {
           final b = prioritizedBookings.first;
           newId = b.id;
           newBooking = {
             'id': newId,
             ...b.data(),
-            'declined_riders': List<String>.from(b.data()['declined_riders'] ?? []),
+            'declined_riders':
+                List<String>.from(b.data()['declined_riders'] ?? []),
           };
         }
         if (newId != null && newId != _currentBookingId) {
@@ -267,13 +416,16 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
               children: [
                 // 1️⃣ Switch at top
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: SwitchListTile(
                     title: Text(
                       _isAvailable
                           ? 'Online: Searching for passengers'
                           : 'Offline: Not available',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold), // center title text
+                      style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold), // center title text
                     ),
                     value: _isAvailable,
                     activeColor: Colors.green,
@@ -323,7 +475,18 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
           body: Stack(
             children: [
               GoogleMap(
-                onMapCreated: (c) => _mapController = c,
+                onMapCreated: (c) {
+                  _mapController = c;
+                  // If polylines already exist, fit bounds
+                  if (_polylines.isNotEmpty) {
+                    final points = _polylines.first.points;
+                    final bounds = _boundsFrom(points);
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      c.animateCamera(
+                          CameraUpdate.newLatLngBounds(bounds, 100));
+                    });
+                  }
+                },
                 initialCameraPosition: CameraPosition(
                   target: _currentLatLng!,
                   zoom: 14,
@@ -350,26 +513,109 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
                 alignment: Alignment.bottomCenter,
                 child: Card(
                   margin: const EdgeInsets.all(16),
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Passenger: ${_currentBooking?['passenger']}', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 4),
-                        Text('Phone: ${_currentBooking?['phone']}', style: theme.textTheme.bodyMedium),
-                        const SizedBox(height: 12),
+                        // Passenger name and priority badge
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Passenger: ${_currentBooking?['passenger']}',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (_currentBooking?['priorityType'] == 'special')
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'SPECIAL',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const Divider(height: 20),
+
+                        // Pickup and Dropoff
+                        _buildInfoRow(
+                          Icons.location_on,
+                          'Pickup',
+                          _currentBooking?['pickUpAddress'] ?? 'N/A',
+                          theme,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildInfoRow(
+                          Icons.flag,
+                          'Drop-off',
+                          _currentBooking?['dropOffAddress'] ?? 'N/A',
+                          theme,
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Fare and Passenger Count
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: _buildInfoRow(
+                                Icons.people,
+                                'Passengers',
+                                '${_currentBooking?['passengerCount'] ?? 1}',
+                                theme,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildInfoRow(
+                                Icons.payments,
+                                'Fare',
+                                '₱${(_currentBooking?['fare'] ?? 0).toStringAsFixed(2)}',
+                                theme,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const Divider(height: 20),
+
+                        // Action buttons
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             TextButton(
-                              onPressed: () => _declineBooking(_currentBooking!),
+                              onPressed: () =>
+                                  _declineBooking(_currentBooking!),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red,
+                              ),
                               child: const Text('Decline'),
                             ),
                             const SizedBox(width: 8),
                             ElevatedButton(
                               onPressed: () => _acceptBooking(_currentBooking!),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                              ),
                               child: const Text('Accept'),
                             ),
                           ],

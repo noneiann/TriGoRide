@@ -14,7 +14,6 @@ import 'package:tri_go_ride/ui/screens/passenger_side/waiting_for_driver.dart';
 import '../../location_picker_screen.dart';
 import '../../voice_hailing.dart';
 
-
 Future<String?> getNearestPlace(double lat, double lng) async {
   await dotenv.load(fileName: ".env");
   final key = dotenv.get('GOOGLEMAPS_APIKEY');
@@ -23,12 +22,12 @@ Future<String?> getNearestPlace(double lat, double lng) async {
     return null;
   }
 
-
   final params = {
-    'key'     : key,
+    'key': key,
     'location': '$lat,$lng',
-    'rankby'  : 'distance',
-    'type'    : 'establishment', // You might want to broaden this or use 'point_of_interest'
+    'rankby': 'distance',
+    'type':
+        'establishment', // You might want to broaden this or use 'point_of_interest'
   };
   final url = Uri.https(
     'maps.googleapis.com',
@@ -38,14 +37,11 @@ Future<String?> getNearestPlace(double lat, double lng) async {
 
   debugPrint('🔗 Nearby Search URL:\n  $url');
 
-
   final res = await http.get(url);
   debugPrint('📥 HTTP ${res.statusCode}');
 
-
-  final bodySnippet = res.body.length > 1000
-      ? res.body.substring(0, 1000) + '…'
-      : res.body;
+  final bodySnippet =
+      res.body.length > 1000 ? res.body.substring(0, 1000) + '…' : res.body;
   debugPrint('📝 Body:\n$bodySnippet');
 
   if (res.statusCode != 200) {
@@ -74,9 +70,14 @@ Future<String?> getNearestPlace(double lat, double lng) async {
     final poi = results[i] as Map<String, dynamic>;
     final name = poi['name'] as String?;
     final vicinity = poi['vicinity'] as String?;
-    debugPrint('  [$i] Name: ${poi['name']}, Vicinity: ${poi['vicinity']}, Types: ${poi['types']}');
-    if (name != null && !name.contains(RegExp(r'^\d+\.\d+,\s*-?\d+\.\d+$'))) { // Avoid names that are just lat,lng
-      return name.split(',').first.trim(); // Return the primary part of the name
+    debugPrint(
+        '  [$i] Name: ${poi['name']}, Vicinity: ${poi['vicinity']}, Types: ${poi['types']}');
+    if (name != null && !name.contains(RegExp(r'^\d+\.\d+,\s*-?\d+\.\d+$'))) {
+      // Avoid names that are just lat,lng
+      return name
+          .split(',')
+          .first
+          .trim(); // Return the primary part of the name
     }
   }
   // Fallback to the first result's name if no better one is found
@@ -103,18 +104,21 @@ class _BookRideScreenState extends State<BookRideScreen> {
   Set<Polyline> _polylines = {};
   GoogleMapController? _mapController;
 
-  String _selectedPriority = 'regular'; // Default option: 'regular' or 'special'
-  final TextEditingController _specialAmountController = TextEditingController();
+  String _selectedPriority =
+      'regular'; // Default option: 'regular' or 'special'
+  final TextEditingController _specialAmountController =
+      TextEditingController();
   double _enteredSpecialAmount = 0.0;
+  int _passengerCount = 1; // Number of passengers (default 1)
 
   double _getZoomLevel() {
     final d = _distanceKm;
-    if (d < 1) return 16;          // under 1 km
-    if (d < 5) return 14;          // 1–5 km
-    if (d < 10) return 13;         // 5–10 km
-    if (d < 20) return 12;         // 10–20 km
-    if (d < 50) return 10;         // 20–50 km
-    return 8;                      // farther out
+    if (d < 1) return 16; // under 1 km
+    if (d < 5) return 14; // 1–5 km
+    if (d < 10) return 13; // 5–10 km
+    if (d < 20) return 12; // 10–20 km
+    if (d < 50) return 10; // 20–50 km
+    return 8; // farther out
   }
 
   @override
@@ -136,9 +140,11 @@ class _BookRideScreenState extends State<BookRideScreen> {
     if (email == null) return;
     // It's good practice to check if mounted before setState after async operations.
     if (!mounted) return;
-    final userDoc = await _authService.firestore.collection('users').doc(email).get();
+    final userDoc =
+        await _authService.firestore.collection('users').doc(email).get();
     if (!mounted) return;
-    _passenger = (userDoc.data() as Map<String, dynamic>)['username'] as String?;
+    _passenger =
+        (userDoc.data() as Map<String, dynamic>)['username'] as String?;
     await _checkActiveBooking();
   }
 
@@ -152,13 +158,14 @@ class _BookRideScreenState extends State<BookRideScreen> {
     if (!mounted) return;
     if (snap.docs.isEmpty) return;
     final data = snap.docs.first.data() as Map<String, dynamic>;
-    final pu   = data['pickUp']  as GeoPoint;
+    final pu = data['pickUp'] as GeoPoint;
     final doff = data['dropOff'] as GeoPoint;
-    Navigator.pushReplacement(context,
+    Navigator.pushReplacement(
+      context,
       MaterialPageRoute(
         builder: (_) => WaitingForDriverScreen(
           bookingId: snap.docs.first.id,
-          pickUp:  LatLng(pu.latitude, pu.longitude),
+          pickUp: LatLng(pu.latitude, pu.longitude),
           dropOff: LatLng(doff.latitude, doff.longitude),
         ),
       ),
@@ -169,58 +176,85 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
   double _calcKm(LatLng a, LatLng b) {
     const R = 6371; // km
-    final dLat = _toRad(b.latitude  - a.latitude);
+    final dLat = _toRad(b.latitude - a.latitude);
     final dLon = _toRad(b.longitude - a.longitude);
     final lat1 = _toRad(a.latitude);
     final lat2 = _toRad(b.latitude);
-    final h = sin(dLat/2)*sin(dLat/2)
-        + cos(lat1)*cos(lat2)*sin(dLon/2)*sin(dLon/2);
+    final h = sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
     return 2 * R * atan2(sqrt(h), sqrt(1 - h));
   }
 
-  double get _distanceKm =>
-      (_pickUp != null && _dropOff != null)
-          ? _calcKm(_pickUp!, _dropOff!)
-          : 0.0;
+  double get _distanceKm => (_pickUp != null && _dropOff != null)
+      ? _calcKm(_pickUp!, _dropOff!)
+      : 0.0;
 
-  double get _distanceM =>
-      (_pickUp != null && _dropOff != null)
-          ? _calcKm(_pickUp!, _dropOff!) * 1000
-          : 0.0;
+  double get _distanceM => (_pickUp != null && _dropOff != null)
+      ? _calcKm(_pickUp!, _dropOff!) * 1000
+      : 0.0;
 
-  double getServiceFee(double baseFare){
+  double getServiceFee(double baseFare) {
     return baseFare * 0.1; // 10% service fee
   }
 
   // This is the base cost of the ride before any fees or special amounts
   double get _baseRideCost {
     if (_pickUp == null || _dropOff == null) return 0.0;
-    final raw = (_distanceM / 2000); // Assuming 2000m is a unit for fare calculation
-    final double fare = raw < 1 ? 15 : 15 + (raw * 1.5); // ₱15 base, + ₱1.5 per 2000m unit
+    final raw =
+        (_distanceM / 2000); // Assuming 2000m is a unit for fare calculation
+    final double fare =
+        raw < 1 ? 15 : 15 + (raw * 1.5); // ₱15 base, + ₱1.5 per 2000m unit
     return fare;
   }
 
   // This is the calculated service fee based on the base ride cost
   double get _serviceFeeAmount {
+    if (_selectedPriority == 'special') {
+      // For special rides, calculate service fee from the special amount
+      return getServiceFee(_enteredSpecialAmount);
+    }
+    // For regular rides, calculate from base ride cost
     return getServiceFee(_baseRideCost);
+  }
+
+  // This is the base cost stored in database (0 for special rides)
+  double get _baseRideCostForDatabase {
+    if (_selectedPriority == 'special') {
+      // For special rides, deduct service fee from special amount
+      return _enteredSpecialAmount - _serviceFeeAmount;
+    }
+    return _baseRideCost;
   }
 
   // This is the final total fare the passenger will pay
   double get _totalPayableFare {
-    double totalFare = _baseRideCost + _serviceFeeAmount;
     if (_selectedPriority == 'special') {
-      totalFare += _enteredSpecialAmount;
+      // For special rides, charge entered amount with minimum of 60 pesos (not per head)
+      final specialAmount =
+          _enteredSpecialAmount < 60 ? 60 : _enteredSpecialAmount;
+      return double.parse(specialAmount.toStringAsFixed(2));
     }
+    // For regular rides, charge (base fare + service fee) * passenger count (per head)
+    double farePerPerson = _baseRideCost + _serviceFeeAmount;
+    double totalFare = farePerPerson * _passengerCount;
     return double.parse(totalFare.toStringAsFixed(2));
   }
 
   Future<LatLng?> _getCoordinatesFromName(String name) async {
     await dotenv.load(fileName: ".env");
     final key = dotenv.get('GOOGLEMAPS_APIKEY');
-    final url = Uri.https('maps.googleapis.com', '/maps/api/place/textsearch/json', {
+
+    // Oroquieta City approximate center coordinates and radius
+    // Center: 8.4858° N, 123.8050° E
+    // Radius: 30km to cover the city area and surrounding barangays
+    final url =
+        Uri.https('maps.googleapis.com', '/maps/api/place/textsearch/json', {
       'key': key,
       'query': name,
+      'location': '8.4858,123.8050', // Oroquieta City center
+      'radius': '30000', // 30km radius
     });
+
     final res = await http.get(url);
     if (res.statusCode != 200) return null;
     final data = jsonDecode(res.body);
@@ -241,7 +275,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
       ),
     );
     if (pts.points.isEmpty) return;
-    final route = pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
+    final route =
+        pts.points.map((e) => LatLng(e.latitude, e.longitude)).toList();
     final bounds = _boundsFrom(route);
 
     setState(() {
@@ -270,8 +305,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
         if (p.longitude < y0!) y0 = p.longitude;
       }
     }
-    return LatLngBounds(southwest: LatLng(x0!, y0!), northeast: LatLng(x1!, y1!));
+    return LatLngBounds(
+        southwest: LatLng(x0!, y0!), northeast: LatLng(x1!, y1!));
   }
+
   void _fitMapToMarkers() {
     if (_pickUp == null || _dropOff == null || _mapController == null) return;
 
@@ -280,60 +317,171 @@ class _BookRideScreenState extends State<BookRideScreen> {
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
   }
 
-
   Future<void> _selectLocation(bool isPickup) async {
-    final chosen = await Navigator.push(context, MaterialPageRoute(builder: (_) => LocationPickerScreen()));
+    final chosen = await Navigator.push(
+        context, MaterialPageRoute(builder: (_) => LocationPickerScreen()));
     if (chosen == null) return;
-    setState(() { if (isPickup) _pickUp = chosen; else _dropOff = chosen; _fitMapToMarkers(); });
+    setState(() {
+      if (isPickup)
+        _pickUp = chosen;
+      else
+        _dropOff = chosen;
+      _fitMapToMarkers();
+    });
     final addr = await getNearestPlace(chosen.latitude, chosen.longitude);
-    setState(() { if (isPickup) _pickUpAddress = addr; else _dropOffAddress = addr; _fitMapToMarkers(); });
+    setState(() {
+      if (isPickup)
+        _pickUpAddress = addr;
+      else
+        _dropOffAddress = addr;
+      _fitMapToMarkers();
+    });
     if (_pickUp != null && _dropOff != null) {
-      _getRoute(GeoPoint(_pickUp!.latitude, _pickUp!.longitude), GeoPoint(_dropOff!.latitude, _dropOff!.longitude));
+      _getRoute(GeoPoint(_pickUp!.latitude, _pickUp!.longitude),
+          GeoPoint(_dropOff!.latitude, _dropOff!.longitude));
     }
   }
 
   Future<void> _startVoiceHailing() async {
-    final res = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const VoiceInputScreen()));
+    final res = await Navigator.push<Map<String, String>>(
+        context, MaterialPageRoute(builder: (_) => const VoiceInputScreen()));
     if (res == null) return;
     final puName = res['pickup']!, doName = res['dropoff']!;
-    final pu = await _getCoordinatesFromName(puName);
-    final dof = await _getCoordinatesFromName(doName);
+
+    // Append "Oroquieta City" to restrict voice hailing to the city
+    final puQuery = '$puName, Oroquieta City, Philippines';
+    final doQuery = '$doName, Oroquieta City, Philippines';
+
+    final pu = await _getCoordinatesFromName(puQuery);
+    final dof = await _getCoordinatesFromName(doQuery);
+
+    // Validate that locations are within Oroquieta City (approximately 10km radius from center)
+    if (pu != null && !_isWithinOroquietaCity(pu)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Pickup location "$puName" is outside Oroquieta City. Please choose a location within the city.'),
+            backgroundColor: Colors.orange[700],
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (dof != null && !_isWithinOroquietaCity(dof)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Drop-off location "$doName" is outside Oroquieta City. Please choose a location within the city.'),
+            backgroundColor: Colors.orange[700],
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     if (pu != null && dof != null) {
-      setState(() { _pickUp = pu; _dropOff = dof; _pickUpAddress = puName; _dropOffAddress = doName; _fitMapToMarkers(); });
-      _getRoute(GeoPoint(pu.latitude, pu.longitude), GeoPoint(dof.latitude, dof.longitude));
+      setState(() {
+        _pickUp = pu;
+        _dropOff = dof;
+        _pickUpAddress = puName;
+        _dropOffAddress = doName;
+        _fitMapToMarkers();
+      });
+      _getRoute(GeoPoint(pu.latitude, pu.longitude),
+          GeoPoint(dof.latitude, dof.longitude));
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Could not find the specified locations. Please try again with clearer landmarks.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
+  /// Check if a location is within Oroquieta City bounds (approx 30km radius from center)
+  bool _isWithinOroquietaCity(LatLng location) {
+    const oroquietaCenter = LatLng(8.4858, 123.8050);
+    const maxDistanceKm = 30.0;
+
+    final distance = _calculateDistance(
+      oroquietaCenter.latitude,
+      oroquietaCenter.longitude,
+      location.latitude,
+      location.longitude,
+    );
+
+    return distance <= maxDistanceKm;
+  }
+
+  /// Calculate distance between two coordinates using Haversine formula (in kilometers)
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const earthRadiusKm = 6371.0;
+
+    final dLat = _degreesToRadians(lat2 - lat1);
+    final dLon = _degreesToRadians(lon2 - lon1);
+
+    final a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(lat1)) *
+            cos(_degreesToRadians(lat2)) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return earthRadiusKm * c;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * pi / 180;
+  }
 
   Future<void> _bookRide() async {
     if (_pickUp == null || _dropOff == null || _passenger == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select pickup, drop-off, or ensure you are logged in.')),
+        const SnackBar(
+            content: Text(
+                'Please select pickup, drop-off, or ensure you are logged in.')),
       );
       return;
     }
 
     if (_selectedPriority == 'special' && _enteredSpecialAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('For special priority, please enter a valid additional amount.')),
+        const SnackBar(
+            content: Text('For special rides, please enter your fare amount.')),
       );
       return;
     }
 
-
-    final pu  = _pickUp!;
+    final pu = _pickUp!;
     final dof = _dropOff!;
 
     String dialogContent = 'From:  ${_pickUpAddress}\n'
         'To:    ${_dropOffAddress}\n\n'
         'Distance: ${_distanceM.toStringAsFixed(2)} m\n'
-        'Base Ride Cost: ₱${_baseRideCost.toStringAsFixed(2)}\n'
-        'Service Fee: ₱${_serviceFeeAmount.toStringAsFixed(2)}\n';
-    if (_selectedPriority == 'special' && _enteredSpecialAmount > 0) {
-      dialogContent += 'Special Add-on: ₱${_enteredSpecialAmount.toStringAsFixed(2)}\n';
-    }
-    dialogContent += '\nTotal Fare: ₱${_totalPayableFare.toStringAsFixed(2)}';
+        'Passengers: $_passengerCount\n\n';
 
+    if (_selectedPriority == 'special') {
+      // For special rides, only show the special amount (no base fee or service fee)
+      dialogContent +=
+          'Special Fare: ₱${_enteredSpecialAmount.toStringAsFixed(2)}\n';
+    } else {
+      // For regular rides, show breakdown
+      dialogContent += 'Base Ride Cost: ₱${_baseRideCost.toStringAsFixed(2)}\n'
+          'Service Fee: ₱${_serviceFeeAmount.toStringAsFixed(2)}\n';
+    }
+
+    dialogContent += '\nTotal Fare: ₱${_totalPayableFare.toStringAsFixed(2)}';
 
     final ok = await showDialog<bool>(
       context: context,
@@ -341,27 +489,34 @@ class _BookRideScreenState extends State<BookRideScreen> {
         title: const Text('Confirm Booking'),
         content: Text(dialogContent),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context,false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context,true), child: const Text('Book')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Book')),
         ],
       ),
     );
     if (ok != true) return;
 
     final docRef = await _bookings.add({
-      'dateBooked'     : Timestamp.now(),
-      'passenger'      : _passenger,
-      'status'         : 'Pending',
-      'active'         : true,
-      'pickUp'         : GeoPoint(pu.latitude, pu.longitude),
-      'pickUpAddress'  : _pickUpAddress,
-      'dropOff'        : GeoPoint(dof.latitude, dof.longitude),
-      'dropOffAddress' : _dropOffAddress,
-      'fare'           : _totalPayableFare,
-      'baseRideCost'   : _baseRideCost,
-      'serviceFee'     : _serviceFeeAmount,
-      'priorityType'   : _selectedPriority,
-      'specialAmount'  : _selectedPriority == 'special' ? _enteredSpecialAmount : 0.0,
+      'dateBooked': Timestamp.now(),
+      'passenger': _passenger,
+      'status': 'Pending',
+      'active': true,
+      'pickUp': GeoPoint(pu.latitude, pu.longitude),
+      'pickUpAddress': _pickUpAddress,
+      'dropOff': GeoPoint(dof.latitude, dof.longitude),
+      'dropOffAddress': _dropOffAddress,
+      'fare': _totalPayableFare,
+      'baseRideCost':
+          _baseRideCostForDatabase, // For special rides: special amount - service fee
+      'serviceFee': _serviceFeeAmount, // Always 10% of base or special amount
+      'priorityType': _selectedPriority,
+      'specialAmount':
+          _selectedPriority == 'special' ? _enteredSpecialAmount : 0.0,
+      'passengerCount': _passengerCount, // Number of passengers riding
     });
 
     // Get current user
@@ -377,28 +532,30 @@ class _BookRideScreenState extends State<BookRideScreen> {
     await _notifs.add({
       'userId': user.email!,
       'type': 'booking',
-      'message': 'Ride booked successfully. Waiting for driver. Total Fare: ₱${_totalPayableFare.toStringAsFixed(2)}',
+      'message':
+          'Ride booked successfully. Waiting for driver. Total Fare: ₱${_totalPayableFare.toStringAsFixed(2)}',
       'timestamp': Timestamp.now(),
       'read': false,
       'bookingId': docRef.id,
     });
     await NotiService().showNotification(
       title: 'Ride Booked!',
-      body: 'Driver is being assigned. Estimated fare: ₱${_totalPayableFare.toStringAsFixed(2)}',
+      body:
+          'Driver is being assigned. Estimated fare: ₱${_totalPayableFare.toStringAsFixed(2)}',
     );
 
     if (!mounted) return;
-    Navigator.pushReplacement(context,
+    Navigator.pushReplacement(
+      context,
       MaterialPageRoute(
         builder: (_) => WaitingForDriverScreen(
           bookingId: docRef.id,
-          pickUp:  pu,
+          pickUp: pu,
           dropOff: dof,
         ),
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -422,34 +579,42 @@ class _BookRideScreenState extends State<BookRideScreen> {
           children: [
             // Map Preview
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               clipBehavior: Clip.hardEdge,
               child: SizedBox(
                 height: 200,
                 child: showMap
                     ? GoogleMap(
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    _fitMapToMarkers();
-                  },
-                  initialCameraPosition: CameraPosition(
-                    target: LatLng(
-                      (_pickUp!.latitude  + _dropOff!.latitude )/2,
-                      (_pickUp!.longitude + _dropOff!.longitude)/2,
-                    ),
-                    zoom: _getZoomLevel(), // Adjust zoom dynamically based on distance?
-                  ),
-                  markers: {
-                    Marker(markerId: const MarkerId('pu'), position: _pickUp!),
-                    Marker(markerId: const MarkerId('do'), position: _dropOff!),
-                  },
-                  polylines: _polylines,
-                  zoomControlsEnabled: false,
-                  scrollGesturesEnabled: false,
-                  tiltGesturesEnabled: false,
-                  rotateGesturesEnabled: false,
-                )
-                    : Center(child: Text('Map preview will appear here', style: theme.textTheme.bodyMedium)),
+                        onMapCreated: (controller) {
+                          _mapController = controller;
+                          _fitMapToMarkers();
+                        },
+                        initialCameraPosition: CameraPosition(
+                          target: LatLng(
+                            (_pickUp!.latitude + _dropOff!.latitude) / 2,
+                            (_pickUp!.longitude + _dropOff!.longitude) / 2,
+                          ),
+                          zoom:
+                              _getZoomLevel(), // Adjust zoom dynamically based on distance?
+                        ),
+                        markers: {
+                          Marker(
+                              markerId: const MarkerId('pu'),
+                              position: _pickUp!),
+                          Marker(
+                              markerId: const MarkerId('do'),
+                              position: _dropOff!),
+                        },
+                        polylines: _polylines,
+                        zoomControlsEnabled: false,
+                        scrollGesturesEnabled: false,
+                        tiltGesturesEnabled: false,
+                        rotateGesturesEnabled: false,
+                      )
+                    : Center(
+                        child: Text('Map preview will appear here',
+                            style: theme.textTheme.bodyMedium)),
               ),
             ),
 
@@ -457,7 +622,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
             // Location selectors
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 2,
               child: Column(
                 children: [
@@ -465,7 +631,11 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     leading: const Icon(Icons.my_location),
                     title: const Text('Pickup location'),
                     subtitle: _pickUpAddress != null
-                        ? Text(_pickUpAddress!, overflow: TextOverflow.ellipsis, maxLines: 1,)
+                        ? Text(
+                            _pickUpAddress!,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          )
                         : const Text('Tap to select'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _selectLocation(true),
@@ -475,7 +645,11 @@ class _BookRideScreenState extends State<BookRideScreen> {
                     leading: const Icon(Icons.flag_outlined),
                     title: const Text('Drop-off location'),
                     subtitle: _dropOffAddress != null
-                        ? Text(_dropOffAddress!, overflow: TextOverflow.ellipsis, maxLines: 1,)
+                        ? Text(
+                            _dropOffAddress!,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          )
                         : const Text('Tap to select'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => _selectLocation(false),
@@ -486,19 +660,107 @@ class _BookRideScreenState extends State<BookRideScreen> {
 
             const SizedBox(height: 24),
 
-            // Ride Priority Selection
+            // Number of Passengers Selection
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0), // Align with card content
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0), // Align with card content
               child: Text(
-                'Ride Priority',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                'Number of Passengers',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
             const SizedBox(height: 8),
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 2,
-              child: Theme( // To ensure radio buttons pick up primary color correctly
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: _passengerCount > 1
+                          ? () {
+                              setState(() {
+                                _passengerCount--;
+                              });
+                            }
+                          : null,
+                      icon: const Icon(Icons.remove_circle_outline),
+                      color: Theme.of(context).colorScheme.primary,
+                      iconSize: 32,
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$_passengerCount',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    IconButton(
+                      onPressed: _passengerCount < 6
+                          ? () {
+                              setState(() {
+                                _passengerCount++;
+                              });
+                            }
+                          : null,
+                      icon: const Icon(Icons.add_circle_outline),
+                      color: Theme.of(context).colorScheme.primary,
+                      iconSize: 32,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _passengerCount == 1
+                            ? '1 passenger'
+                            : '$_passengerCount passengers',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Ride Priority Selection
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0), // Align with card content
+              child: Text(
+                'Ride Priority',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 2,
+              child: Theme(
+                // To ensure radio buttons pick up primary color correctly
                 data: Theme.of(context).copyWith(
                   unselectedWidgetColor: Theme.of(context).colorScheme.primary,
                 ),
@@ -513,7 +775,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         });
                       },
                       title: const Text('Regular'),
-                      subtitle: const Text('Standard fare: ₱15 base + ₱1.50/2km'),
+                      subtitle:
+                          const Text('Standard fare: ₱15 base + ₱1.50/2km'),
                       activeColor: Theme.of(context).colorScheme.primary,
                     ),
                     RadioListTile<String>(
@@ -525,25 +788,33 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         });
                       },
                       title: const Text('Special'),
-                      subtitle: const Text('Add an extra amount for your booking'),
+                      subtitle:
+                          const Text('Add an extra amount for your booking'),
                       activeColor: Theme.of(context).colorScheme.primary,
                     ),
                     if (_selectedPriority == 'special')
                       Padding(
-                        padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 16.0, top: 0),
+                        padding: const EdgeInsets.only(
+                            left: 24.0, right: 24.0, bottom: 16.0, top: 0),
                         child: TextFormField(
                           controller: _specialAmountController,
                           decoration: InputDecoration(
-                            labelText: 'Additional Amount',
+                            labelText: 'Your Fare (Total Amount)',
+                            hintText: 'Enter your fare amount',
+                            helperText: 'No base fee - you set the price',
                             prefixText: '₱ ',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
                             isDense: true,
                           ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           onChanged: (value) {
                             setState(() {
-                              _enteredSpecialAmount = double.tryParse(value) ?? 0.0;
+                              _enteredSpecialAmount =
+                                  double.tryParse(value) ?? 0.0;
                             });
                           },
                         ),
@@ -553,24 +824,30 @@ class _BookRideScreenState extends State<BookRideScreen> {
               ),
             ),
 
-
-            const SizedBox(height: 24,),
+            const SizedBox(
+              height: 24,
+            ),
             // Summary card
             if (showMap)
               Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                color: theme.colorScheme.primaryContainer.withOpacity(0.3), // Use primaryContainer
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                color: theme.colorScheme.primaryContainer
+                    .withOpacity(0.3), // Use primaryContainer
                 elevation: 0,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Ride Summary', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Ride Summary',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Icon(Icons.directions_car, color: theme.colorScheme.primary, size: 20),
+                          Icon(Icons.directions_car,
+                              color: theme.colorScheme.primary, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -581,39 +858,48 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      _buildSummaryRow(
-                          theme, 'Base Ride Cost:', '₱${_baseRideCost.toStringAsFixed(2)}'),
-                      _buildSummaryRow(
-                          theme, 'Service Fee (10%):', '₱${_serviceFeeAmount.toStringAsFixed(2)}'),
-                      if (_selectedPriority == 'special' && _enteredSpecialAmount > 0)
-                        _buildSummaryRow(
-                            theme, 'Special Add-on:', '₱${_enteredSpecialAmount.toStringAsFixed(2)}'),
+                      _buildSummaryRow(theme, 'Base Ride Cost:',
+                          '₱${_baseRideCost.toStringAsFixed(2)}'),
+                      _buildSummaryRow(theme, 'Service Fee (10%):',
+                          '₱${_serviceFeeAmount.toStringAsFixed(2)}'),
+                      if (_selectedPriority == 'special' &&
+                          _enteredSpecialAmount > 0)
+                        _buildSummaryRow(theme, 'Special Add-on:',
+                            '₱${_enteredSpecialAmount.toStringAsFixed(2)}'),
                       const Divider(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Total Fare:', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          Text('₱${_totalPayableFare.toStringAsFixed(2)}', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                          Text('Total Fare:',
+                              style: theme.textTheme.bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.bold)),
+                          Text('₱${_totalPayableFare.toStringAsFixed(2)}',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.primary)),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: IconButton(
-                    iconSize: 48,
-                    icon: Icon(Icons.mic, color: theme.colorScheme.primary),
-                    onPressed: _startVoiceHailing,
-                    tooltip: 'Voice Hailing',
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: IconButton(
+                  iconSize: 128, // you can adjust size
+                  icon: Image.asset(
+                    'assets/p-10.png',
+                    width: 120,
+                    height: 120,
                   ),
+                  onPressed: _startVoiceHailing,
+                  tooltip: 'Voice Hailing',
                 ),
               ),
+            ),
+
             const SizedBox(height: 100), // Space for bottom sheet
-
-
           ],
         ),
       ),
@@ -623,19 +909,19 @@ class _BookRideScreenState extends State<BookRideScreen> {
           onPressed: canBook ? _bookRide : null,
           style: ElevatedButton.styleFrom(
             minimumSize: const Size(double.infinity, 56),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             backgroundColor: theme.colorScheme.primary,
             foregroundColor: theme.colorScheme.onPrimary,
           ).copyWith(
             elevation: MaterialStateProperty.all(canBook ? 2 : 0),
           ),
-          child: const Text('Book Ride', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          child: const Text('Book Ride',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         ),
       ),
     );
   }
-
-
 
   Widget _buildSummaryRow(ThemeData theme, String label, String value) {
     return Padding(
@@ -644,7 +930,9 @@ class _BookRideScreenState extends State<BookRideScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: theme.textTheme.bodyMedium),
-          Text(value, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+          Text(value,
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w500)),
         ],
       ),
     );

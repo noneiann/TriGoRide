@@ -12,10 +12,9 @@ import 'package:tri_go_ride/ui/screens/rider_side/driver_rating.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/passenger_search.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_profile.dart';
 import 'package:tri_go_ride/ui/screens/rider_side/rider_ride_history.dart';
-import 'package:tri_go_ride/services/cloudinary_service.dart';
 
 final CloudinaryObject cloudinary =
-CloudinaryObject.fromCloudName(cloudName: 'dgu4lwrwn');
+    CloudinaryObject.fromCloudName(cloudName: 'dgu4lwrwn');
 
 class RiderHomeScreen extends StatefulWidget {
   const RiderHomeScreen({super.key});
@@ -33,6 +32,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
 
   bool _loadingNotifs = true;
   List<Map<String, dynamic>> _notifications = [];
+  int _unreadCount = 0;
 
   @override
   void initState() {
@@ -55,6 +55,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     }
 
     List<Map<String, dynamic>> notifs = [];
+    int unreadCount = 0;
     if (user?.email != null) {
       final qs = await _authService.firestore
           .collection('notifs')
@@ -68,17 +69,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
           'message': d['message'] as String? ?? '',
           'type': d['type'] as String? ?? 'system',
           'timestamp': d['timestamp'] as Timestamp?,
+          'read': d['read'] ?? false,
         };
       }).toList();
+
+      // Get unread count
+      final unreadQuery = await _authService.firestore
+          .collection('notifs')
+          .where('userId', isEqualTo: user.email)
+          .where('read', isEqualTo: false)
+          .get();
+      unreadCount = unreadQuery.docs.length;
     }
 
     setState(() {
       _name = fetchedName;
       _profileId = fetchedProfileId;
       _notifications = notifs;
+      _unreadCount = unreadCount;
       _loading = false;
       _loadingNotifs = false;
-      print( "Profile ID: " + _profileId);
+      print("Profile ID: $_profileId");
     });
   }
 
@@ -87,18 +98,38 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
     return DateFormat('h:mm a').format(ts.toDate());
   }
 
-  IconData _iconForNotificationType(String type) {
+  Widget _iconForNotificationType(String type) {
     switch (type) {
       case 'booking':
-        return Icons.motorcycle;
+        return Image.asset(
+          'assets/p-01.png',
+          width: 50,
+          height: 50,
+        );
       case 'booking_update':
-        return Icons.electric_rickshaw;
+        return Image.asset(
+          'assets/p-01.png',
+          width: 50,
+          height: 50,
+        );
       case 'payment':
-        return Icons.payment;
+        return const Icon(
+          Icons.payment,
+          size: 50,
+          color: Colors.orange,
+        );
       case 'promo':
-        return Icons.local_offer;
+        return const Icon(
+          Icons.local_offer,
+          size: 50,
+          color: Colors.orange,
+        );
       default:
-        return Icons.notifications;
+        return const Icon(
+          Icons.notifications,
+          size: 50,
+          color: Colors.orange,
+        );
     }
   }
 
@@ -157,16 +188,27 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                   Row(
                     children: [
                       ClipOval(
-                        child: CldImageWidget(
-                          cloudinary: cloudinary,
-                          publicId: '$_profileId',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                          transformation: Transformation()
-                            ..addTransformation(
-                                'ar_1.0,c_fill,w_100/r_max/f_png'),
-                        ),
+                        child: _profileId.isEmpty
+                            ? Container(
+                                width: 80,
+                                height: 80,
+                                color: theme.primaryColor.withOpacity(0.3),
+                                child: Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: theme.primaryColor,
+                                ),
+                              )
+                            : CldImageWidget(
+                                cloudinary: cloudinary,
+                                publicId: _profileId,
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                transformation: Transformation()
+                                  ..addTransformation(
+                                      'ar_1.0,c_fill,w_100/r_max/f_png'),
+                              ),
                       ),
                       const SizedBox(width: 16),
                       Column(
@@ -176,8 +218,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                           Text(
                             'Hello, $_name',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.textTheme.titleMedium
-                                  ?.color
+                              color: theme.textTheme.titleMedium?.color
                                   ?.withOpacity(0.7),
                             ),
                           ),
@@ -197,8 +238,12 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                             builder: (_) => const NotificationsPage()),
                       );
                     },
-                    icon: Icon(Icons.notifications,
-                        size: 32, color: theme.iconTheme.color),
+                    icon: Badge(
+                      isLabelVisible: _unreadCount > 0,
+                      label: Text(_unreadCount.toString()),
+                      child: Icon(Icons.notifications,
+                          size: 32, color: theme.iconTheme.color),
+                    ),
                   ),
                 ],
               ),
@@ -240,7 +285,7 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child:
-              Text('Recent Activity', style: theme.textTheme.titleMedium),
+                  Text('Recent Activity', style: theme.textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
 
@@ -258,12 +303,9 @@ class _RiderHomeScreenState extends State<RiderHomeScreen> {
                 children: _notifications.map((n) {
                   final ts = n['timestamp'] as Timestamp?;
                   return ListTile(
-                    leading: Icon(
-                      _iconForNotificationType(n['type'] as String),
-                      color: Colors.orange,
-                    ),
-                    title:
-                    Text(n['message'] as String, style: theme.textTheme.bodyMedium),
+                    leading: _iconForNotificationType(n['type'] as String),
+                    title: Text(n['message'] as String,
+                        style: theme.textTheme.bodyMedium),
                     subtitle: Text(_formatTimestamp(ts)),
                   );
                 }).toList(),

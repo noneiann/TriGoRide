@@ -1,5 +1,6 @@
 // Modified RiderBookingsPage class with rating integration
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -9,10 +10,11 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:location/location.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
-
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/auth_services.dart';
+import '../../../services/noti_services.dart';
 import '../passenger_side/rating_dialog.dart';
 
 class RiderBookingsPage extends StatefulWidget {
@@ -97,6 +99,9 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
         final String passengerName = d['passenger'] as String? ?? 'Unknown';
         final String passengerId = d['passengerId'] as String? ?? '';
+        final String pickUpAddress = d['pickUpAddress'] as String? ?? '';
+        final String dropOffAddress = d['dropOffAddress'] as String? ?? '';
+        final fare = d['fare'] ?? '';
 
         // Query users collection for this username
         String phoneNumber = 'N/A';
@@ -121,7 +126,10 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
             'passengerId': passengerId,
             'phone': phoneNumber,
             'pickUp': pickupGP,
+            'pickUpAddress': pickUpAddress,
             'dropOff': dropoffGP,
+            'dropOffAddress': dropOffAddress,
+            'fare': fare,
             'datetime': ts.toDate(),
             'status': d['status'] as String? ?? 'N/A',
           };
@@ -136,8 +144,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     // send every 3 seconds
     _locationUpdateTimer =
         Timer.periodic(const Duration(seconds: 3), (_) async {
-          await _sendCurrentLocation();
-        });
+      await _sendCurrentLocation();
+    });
   }
 
   Future<void> _sendCurrentLocation() async {
@@ -177,7 +185,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
     if (result.points.isNotEmpty) {
       final route =
-      result.points.map((pt) => LatLng(pt.latitude, pt.longitude)).toList();
+          result.points.map((pt) => LatLng(pt.latitude, pt.longitude)).toList();
 
       _polylines.add(Polyline(
         polylineId: const PolylineId('route'),
@@ -186,10 +194,17 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         color: Colors.blue,
       ));
 
+      // Wait for map to be ready and then animate camera
+      await Future.delayed(const Duration(milliseconds: 300));
       if (_mapController != null) {
-        final bounds = _calculateBounds(route);
+        // Include driver's current location in bounds
+        final boundsPoints = [...route];
+        if (_currentLatLng != null) {
+          boundsPoints.add(_currentLatLng!);
+        }
+        final bounds = _calculateBounds(boundsPoints);
         _mapController!.animateCamera(
-          CameraUpdate.newLatLngBounds(bounds, 50),
+          CameraUpdate.newLatLngBounds(bounds, 100),
         );
       }
     } else {
@@ -210,6 +225,29 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     );
   }
 
+  Widget _buildInfoRow(
+      IconData icon, String label, String value, ThemeData theme) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: theme.primaryColor),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: theme.textTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   // Modified complete ride function to include rating
   void _completeRide() async {
     if (_acceptedBooking == null) return;
@@ -217,6 +255,8 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     try {
       // Stop location updates
       _locationUpdateTimer?.cancel();
+
+      print('✅ Booking data: $_acceptedBooking');
 
       final uid = _authService.getUser()?.uid;
       if (uid == null) {
@@ -226,16 +266,111 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         return;
       }
 
-      // Update booking status
+      // Get booking details
+      final bookingId = _acceptedBooking!['id'] as String;
+      final passengerName = _acceptedBooking!['passenger'] as String;
+      final fare = (_acceptedBooking!['fare'] as num?)?.toDouble() ?? 0.0;
+
+      final pickupAddress =
+          _acceptedBooking!['pickUpAddress'] as String? ?? 'Pickup location';
+      final dropoffAddress =
+          _acceptedBooking!['dropOffAddress'] as String? ?? 'Drop-off location';
+
+      // 🔹 Find passenger document by username
+      final passengerQuery = await _authService.firestore
+          .collection('users')
+          .where('username', isEqualTo: passengerName)
+          .get();
+
+      if (passengerQuery.docs.isEmpty) {
+        debugPrint('⚠️ No passenger found with username: $passengerName');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Passenger not found: $passengerName')),
+          );
+        }
+        return;
+      }
+
+      final passengerDoc = passengerQuery.docs.first;
+      final passengerEmail =
+          passengerDoc.data()['email'] as String? ?? 'unknown_user';
+      final passengerToken = passengerDoc.data()['fcmToken'] as String? ?? '';
+      final passengerPhone = passengerDoc.data()['phone'] as String? ?? '';
+
+      // 🔹 Get driver details
+      final driverDoc = await _authService.firestore
+          .collection('users')
+          .doc(_authService.getUser()?.email)
+          .get();
+      final driverName = driverDoc.data()?['username'] as String? ?? 'Driver';
+      final driverEmail = driverDoc.data()?['email'] as String? ?? uid;
+
+      // 🔹 Update booking status
       await _authService.firestore
           .collection('bookings')
-          .doc(_acceptedBooking!['id'])
+          .doc(bookingId)
           .update({
         'status': 'Completed',
         'active': false,
         'completedAt': Timestamp.now(),
       });
 
+      // 🔹 Send FCM notification to passenger
+      if (passengerToken.isNotEmpty) {
+        final sk = dotenv.get('FCM_SERVER_KEY');
+        await http.post(
+          Uri.parse('https://fcm.googleapis.com/fcm/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=$sk',
+          },
+          body: jsonEncode({
+            'to': passengerToken,
+            'notification': {
+              'title': 'Ride Completed',
+              'body':
+                  'Thanks for riding with us, $passengerName! Your fare was ₱${fare.toStringAsFixed(2)}.',
+            },
+          }),
+        );
+      }
+
+      // 🔹 Send email notification
+      await NotiService().sendRideCompletionEmail(
+        passengerEmail: passengerEmail,
+        passengerName: passengerName,
+        driverName: driverName,
+        pickupLocation: pickupAddress,
+        dropoffLocation: dropoffAddress,
+        fare: fare,
+        bookingId: bookingId,
+      );
+
+      // 🔹 Log notifications in Firestore
+      final now = Timestamp.now();
+      final notifs = _authService.firestore.collection('notifs');
+
+      await notifs.add({
+        'userId': passengerEmail,
+        'type': 'ride_update',
+        'message':
+            'Your ride has been completed. Fare: ₱${fare.toStringAsFixed(2)}.',
+        'timestamp': now,
+        'read': false,
+        'bookingId': bookingId,
+      });
+
+      await notifs.add({
+        'userId': driverEmail,
+        'type': 'ride_update',
+        'message': 'You completed the ride for $passengerName.',
+        'timestamp': now,
+        'read': false,
+        'bookingId': bookingId,
+      });
+
+      // 🔹 Navigate to root page
       if (context.mounted) {
         Navigator.pushReplacement(
           context,
@@ -312,7 +447,21 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
       body: Stack(
         children: [
           GoogleMap(
-            onMapCreated: (c) => _mapController = c,
+            onMapCreated: (c) {
+              _mapController = c;
+              // If polylines already exist, fit bounds
+              if (_polylines.isNotEmpty) {
+                final points = _polylines.first.points.toList();
+                // Include driver's current location in bounds
+                if (_currentLatLng != null) {
+                  points.add(_currentLatLng!);
+                }
+                final bounds = _calculateBounds(points);
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  c.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+                });
+              }
+            },
             initialCameraPosition: CameraPosition(
               target: _currentLatLng ?? LatLng(pg.latitude, pg.longitude),
               zoom: 14,
@@ -335,28 +484,90 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Passenger name and status
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(booking['passenger'],
-                            style: theme.textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold)),
-                        Text(booking['status'],
+                        Expanded(
+                          child: Text(booking['passenger'],
+                              style: theme.textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _statusColor(booking['status'])
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            booking['status'],
                             style: TextStyle(
                                 color: _statusColor(booking['status']),
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.access_time, color: theme.primaryColor),
-                        const SizedBox(width: 8),
-                        Text(DateFormat('MMM d, yyyy • h:mm a')
-                            .format(booking['datetime'])),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // Date and time
+                    _buildInfoRow(
+                      Icons.access_time,
+                      'Date & Time',
+                      DateFormat('MMM d, yyyy • h:mm a')
+                          .format(booking['datetime']),
+                      theme,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Pickup location
+                    _buildInfoRow(
+                      Icons.location_on,
+                      'Pickup',
+                      booking['pickUpAddress'] ?? 'N/A',
+                      theme,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Dropoff location
+                    _buildInfoRow(
+                      Icons.flag,
+                      'Dropoff',
+                      booking['dropOffAddress'] ?? 'N/A',
+                      theme,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Passenger count and fare
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _buildInfoRow(
+                            Icons.people,
+                            'Passengers',
+                            '${booking['passengerCount'] ?? 1}',
+                            theme,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildInfoRow(
+                            Icons.payments,
+                            'Fare',
+                            '₱${(booking['fare'] ?? 0).toStringAsFixed(2)}',
+                            theme,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Action buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -364,11 +575,14 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                           onPressed: () async {
                             try {
                               final phone = booking['phone'] as String? ?? '';
-                              final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
+                              final cleanPhone =
+                                  phone.replaceAll(RegExp(r'\s+'), '');
 
                               if (cleanPhone.isEmpty) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('No phone number available')),
+                                  const SnackBar(
+                                      content:
+                                          Text('No phone number available')),
                                 );
                                 return;
                               }
@@ -387,14 +601,15 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                               }
                             }
                           },
-                          icon: const Icon(Icons.phone),
-                          label: Text(booking['phone'] ?? 'Call'),
+                          icon: const Icon(Icons.phone, size: 18),
+                          label: const Text('Call'),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton.icon(
                           onPressed: _completeRide,
-                          icon: const Icon(Icons.check_circle_outline),
-                          label: const Text('Complete Ride'),
+                          icon:
+                              const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('Complete'),
                         ),
                       ],
                     ),

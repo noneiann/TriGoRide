@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
+import 'package:tri_go_ride/ui/login_screen.dart';
 import '../services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 
@@ -11,6 +12,7 @@ class RegisterPassenger extends StatefulWidget {
   @override
   State<RegisterPassenger> createState() => _RegisterPassengerState();
 }
+
 /// TODO: Fucking implement this shit, for now it is a copy of the login splash screen
 class _RegisterPassengerState extends State<RegisterPassenger> {
   final TextEditingController _email = TextEditingController();
@@ -23,8 +25,7 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
   String _error = '';
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
-  bool _showConfirmPassword =false;
-
+  bool _showConfirmPassword = false;
 
   void _register() async {
     setState(() => _loading = true);
@@ -45,15 +46,12 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
       );
       if (user != null) {
         // Store additional profile info in Firestore
-        await _authService.firestore
-            .collection('users')
-            .doc(user.email)
-            .set({
+        await _authService.firestore.collection('users').doc(user.email).set({
           'uid': user.uid,
           'username': _username.text.trim(),
           'email': _email.text.trim(),
           'phone': _phoneNumber.text.trim(),
-          'password':_password.text.trim(),
+          'password': _password.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
           'userType': "Passenger",
         });
@@ -65,13 +63,32 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
         );
       }
     } catch (e) {
+      String errorMessage = 'Registration failed';
+
+      // Parse Firebase auth errors
+      if (e.toString().contains('email-already-in-use')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Invalid email address format.';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage =
+            'Password is too weak. Please use at least 6 characters.';
+      } else if (e.toString().contains('operation-not-allowed')) {
+        errorMessage = 'Email/password accounts are not enabled.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage = 'Registration failed. Please try again.';
+      }
+
       setState(() {
-        _error = 'Registration failed: ${e.toString()}';
+        _error = errorMessage;
       });
     } finally {
       setState(() => _loading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     // Get current theme and brightness.
@@ -94,16 +111,17 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
           children: [
             // Fixed Logo Container - always at the top.
             Container(
-              padding: EdgeInsets.only(top: 64),
-              height: 100,
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.electric_rickshaw,
-                size: 100,
-                color: Colors.orange,
-              ),
-            ),
-            SizedBox(height: 100),
+                padding: EdgeInsets.only(top: 64),
+                height: 200, // set the image height
+                alignment: Alignment.center,
+                child: Image.asset(
+                  isDark
+                      ? 'assets/TriGoRideLogo1.png'
+                      : 'assets/TriGoRideLogo.png',
+                  height: 240, // set the image height
+                  width: 240, // (optional) set the image width
+                )),
+            SizedBox(height: 50),
             // The rest of the login UI.
             Container(
                 width: width,
@@ -123,8 +141,7 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                     ),
                     Text("Please register to continue"),
                   ],
-                )
-            ),
+                )),
 
             SizedBox(height: 40),
             Center(
@@ -325,22 +342,22 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                     _loading
                         ? CircularProgressIndicator()
                         : ElevatedButton(
-                      onPressed: _register,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text("Register"),
-                    ),
+                            onPressed: _register,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Text("Register"),
+                          ),
                     SizedBox(height: 10),
                     // Navigation to registration.
                     TextButton(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => ChooseUser()),
+                          MaterialPageRoute(builder: (_) => LoginPage()),
                         );
                       },
                       child: Text(

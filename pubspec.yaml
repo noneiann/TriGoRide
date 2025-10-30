@@ -2,7 +2,7 @@ name: tri_go_ride
 description: "Oroquieta City Based Tricycle App"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -33,6 +33,7 @@ dependencies:
   firebase_auth: ^5.3.4
   google_sign_in: ^6.2.2
   firebase_core: ^3.9.0
+  firebase_database: ^11.1.4
   google_maps_flutter: ^2.5.1
   location: ^5.0.3
   provider: ^6.1.1
@@ -63,6 +64,7 @@ dependencies:
   flutter_phone_direct_caller: ^2.1.0
   image_picker: ^1.0.4
   speech_to_text: ^7.1.0
+  mailer: ^6.1.2
 
 dev_dependencies:
   flutter_test:
@@ -80,7 +82,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -5,6 +5,7 @@ import 'package:tri_go_ride/ui/choose_user.dart';
 import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
 import '../services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
+import 'package:tri_go_ride/ui/login_screen.dart';
 
 class RegisterDriver extends StatefulWidget {
   const RegisterDriver({super.key});
@@ -12,6 +13,7 @@ class RegisterDriver extends StatefulWidget {
   @override
   State<RegisterDriver> createState() => _RegisterDriverState();
 }
+
 /// TODO: Fucking implement this shit, for now it is a copy of the login splash screen
 class _RegisterDriverState extends State<RegisterDriver> {
   final TextEditingController _email = TextEditingController();
@@ -24,7 +26,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
   String _error = '';
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
-  bool _showConfirmPassword =false;
+  bool _showConfirmPassword = false;
   void _login() async {
     setState(() => _loading = true);
     try {
@@ -40,7 +42,30 @@ class _RegisterDriverState extends State<RegisterDriver> {
         );
       }
     } catch (e) {
-      setState(() => _error = 'Login failed: ${e.toString()}');
+      String errorMessage = 'Login failed';
+
+      // Parse Firebase auth errors
+      if (e.toString().contains('user-not-found')) {
+        errorMessage = 'No account found with this email address.';
+      } else if (e.toString().contains('wrong-password')) {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Invalid email address format.';
+      } else if (e.toString().contains('user-disabled')) {
+        errorMessage = 'This account has been disabled.';
+      } else if (e.toString().contains('too-many-requests')) {
+        errorMessage =
+            'Too many failed login attempts. Please try again later.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else if (e.toString().contains('invalid-credential')) {
+        errorMessage =
+            'Invalid email or password. Please check your credentials.';
+      } else {
+        errorMessage = 'Login failed. Please try again.';
+      }
+
+      setState(() => _error = errorMessage);
     } finally {
       setState(() => _loading = false);
     }
@@ -65,10 +90,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
       );
       if (user != null) {
         // Store additional profile info in Firestore
-        await _authService.firestore
-            .collection('users')
-            .doc(user.email)
-            .set({
+        await _authService.firestore.collection('users').doc(user.email).set({
           'uid': user.uid,
           'username': _username.text.trim(),
           'email': _email.text.trim(),
@@ -79,12 +101,12 @@ class _RegisterDriverState extends State<RegisterDriver> {
           'firstTimeLogIn': true
         });
 
-
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
             title: Text("Registration Successful"),
-            content: Text("Welcome! Proceed to account setup to setup your driver profile."),
+            content: Text(
+                "Welcome! Proceed to account setup to setup your driver profile."),
             actions: [
               TextButton(
                 onPressed: () {
@@ -100,16 +122,33 @@ class _RegisterDriverState extends State<RegisterDriver> {
           ),
         );
       }
-
-
     } catch (e) {
+      String errorMessage = 'Registration failed';
+
+      // Parse Firebase auth errors
+      if (e.toString().contains('email-already-in-use')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (e.toString().contains('invalid-email')) {
+        errorMessage = 'Invalid email address format.';
+      } else if (e.toString().contains('weak-password')) {
+        errorMessage =
+            'Password is too weak. Please use at least 6 characters.';
+      } else if (e.toString().contains('operation-not-allowed')) {
+        errorMessage = 'Email/password accounts are not enabled.';
+      } else if (e.toString().contains('network-request-failed')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage = 'Registration failed. Please try again.';
+      }
+
       setState(() {
-        _error = 'Registration failed: ${e.toString()}';
+        _error = errorMessage;
       });
     } finally {
       setState(() => _loading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     // Get current theme and brightness.
@@ -132,16 +171,17 @@ class _RegisterDriverState extends State<RegisterDriver> {
           children: [
             // Fixed Logo Container - always at the top.
             Container(
-              padding: EdgeInsets.only(top: 64),
-              height: 100,
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.electric_rickshaw,
-                size: 100,
-                color: Colors.orange,
-              ),
-            ),
-            SizedBox(height: 100),
+                padding: EdgeInsets.only(top: 64),
+                height: 200, // set the image height
+                alignment: Alignment.center,
+                child: Image.asset(
+                  isDark
+                      ? 'assets/TriGoRideLogo1.png'
+                      : 'assets/TriGoRideLogo.png',
+                  height: 240, // set the image height
+                  width: 240, // (optional) set the image width
+                )),
+            SizedBox(height: 50),
             // The rest of the login UI.
             Container(
                 width: width,
@@ -161,8 +201,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
                     ),
                     Text("Please register to continue"),
                   ],
-                )
-            ),
+                )),
 
             SizedBox(height: 40),
             Center(
@@ -363,22 +402,22 @@ class _RegisterDriverState extends State<RegisterDriver> {
                     _loading
                         ? CircularProgressIndicator()
                         : ElevatedButton(
-                      onPressed: _register,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: Size(double.infinity, 50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text("Register"),
-                    ),
+                            onPressed: _register,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Text("Register"),
+                          ),
                     SizedBox(height: 10),
                     // Navigation to registration.
                     TextButton(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => ChooseUser()),
+                          MaterialPageRoute(builder: (_) => LoginPage()),
                         );
                       },
                       child: Text(

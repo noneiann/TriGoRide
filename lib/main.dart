@@ -17,23 +17,36 @@ import 'package:cloudinary_flutter/cloudinary_object.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+    FlutterLocalNotificationsPlugin();
 
 final CloudinaryObject cloudinary =
-CloudinaryObject.fromCloudName(cloudName: 'dm1zumkxl');
+    CloudinaryObject.fromCloudName(cloudName: 'dm1zumkxl');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Catch all Flutter framework errors
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('Flutter Error: ${details.exception}');
+  };
+
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
     overlays: SystemUiOverlay.values,
   );
 
-  await Firebase.initializeApp();
-  final authService = AuthService();
-  await authService.initFCM();
-  await dotenv.load();
-  await NotiService().init();
+  try {
+    await Firebase.initializeApp();
+    final authService = AuthService();
+    await authService.initFCM();
+    await dotenv.load();
+    await NotiService().init();
+  } catch (e, stackTrace) {
+    debugPrint('Initialization Error: $e');
+    debugPrint('Stack trace: $stackTrace');
+  }
+
   runApp(const MyApp());
 }
 
@@ -98,8 +111,10 @@ class MyApp extends StatelessWidget {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDarkMode
-          ? SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent)
-          : SystemUiOverlayStyle.dark.copyWith(statusBarColor: Colors.transparent),
+          ? SystemUiOverlayStyle.light
+              .copyWith(statusBarColor: Colors.transparent)
+          : SystemUiOverlayStyle.dark
+              .copyWith(statusBarColor: Colors.transparent),
       child: MaterialApp(
         title: 'TriGoRide',
         theme: lightTheme,

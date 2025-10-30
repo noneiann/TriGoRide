@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String name = '';
   List<Map<String, dynamic>> recentActivities = [];
+  int _unreadCount = 0;
 
   final Map<String, Widget> screens = {
     'Book A Ride': BookRideScreen(),
@@ -49,28 +50,36 @@ class _HomeScreenState extends State<HomeScreen> {
       _loading = false;
     });
   }
+
   String formatTimestamp(DateTime timestamp) {
-    final DateFormat formatter = DateFormat('MMM dd, yyyy h:mm a'); // Example: "Apr 27, 2025 3:30 PM"
+    final DateFormat formatter =
+        DateFormat('MMM dd, yyyy h:mm a'); // Example: "Apr 27, 2025 3:30 PM"
     return formatter.format(timestamp);
   }
+
   void fetchNotifications() {
     _authService.firestore
         .collection("notifs")
         .where("userId", isEqualTo: _authService.getUser()?.email)
         .orderBy("timestamp", descending: true)
         .limit(5)
-        .snapshots()  // Listen for real-time changes
+        .snapshots() // Listen for real-time changes
         .listen((snapshot) {
       final notifications = snapshot.docs.map((doc) {
         return {
           'message': doc['message'],
           'timestamp': doc['timestamp'].toDate(),
           'type': doc['type'],
+          'read': doc['read'] ?? false,
         };
       }).toList();
 
+      final unreadCount = notifications.where((n) => n['read'] == false).length;
+
       setState(() {
-        recentActivities = notifications.take(3).toList(); // Limit to 3 notifications
+        recentActivities =
+            notifications.take(3).toList(); // Limit to 3 notifications
+        _unreadCount = unreadCount;
       });
     });
   }
@@ -111,7 +120,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             'Hello, $name',
                             style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.textTheme.titleMedium?.color?.withOpacity(0.7),
+                              color: theme.textTheme.titleMedium?.color
+                                  ?.withOpacity(0.7),
                             ),
                           ),
                           Text(
@@ -123,8 +133,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   IconButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsPage())),
-                    icon: Icon(Icons.notifications, size: 32, color: theme.iconTheme.color),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => NotificationsPage())),
+                    icon: Badge(
+                      isLabelVisible: _unreadCount > 0,
+                      label: Text(_unreadCount.toString()),
+                      child: Icon(Icons.notifications,
+                          size: 32, color: theme.iconTheme.color),
+                    ),
                   ),
                 ],
               ),
@@ -143,12 +161,12 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSpacing: 12,
               childAspectRatio: 1.6,
               shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
+              physics: const NeverScrollableScrollPhysics(),
               children: screens.entries.map((entry) {
                 return SizedBox(
                   height: 100,
                   child: _OptionCard(
-                    icon: _iconForLabel(entry.key),
+                    iconOrImage: _iconOrImageForLabel(entry.key),
                     label: entry.key,
                     onTap: () {
                       final page = screens[entry.key]!;
@@ -159,7 +177,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         );
                       } else {
                         _authService.signOut();
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LoginPage()));
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => LoginPage()),
+                        );
                       }
                     },
                   ),
@@ -169,14 +190,16 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 24),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Recent Activity', style: theme.textTheme.titleMedium),
+              child:
+                  Text('Recent Activity', style: theme.textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
             // Display real-time updates for the notifications
             ...recentActivities.map((activity) {
               return ListTile(
-                leading: Icon(_iconForNotificationType(activity['type']), color: theme.primaryColor),
-                title: Text(activity['message'], style: theme.textTheme.bodyMedium),
+                leading: _imageForNotificationType(activity['type']),
+                title: Text(activity['message'],
+                    style: theme.textTheme.bodyMedium),
                 subtitle: Text(formatTimestamp(activity['timestamp'])),
               );
             }).toList(),
@@ -188,12 +211,12 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _OptionCard extends StatelessWidget {
-  final IconData icon;
+  final Widget iconOrImage;
   final String label;
   final VoidCallback onTap;
 
   const _OptionCard({
-    required this.icon,
+    required this.iconOrImage,
     required this.label,
     required this.onTap,
   });
@@ -214,7 +237,7 @@ class _OptionCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 32, color: theme.primaryColor),
+              iconOrImage, // <-- works for both Image and Icon
               const SizedBox(height: 8),
               Text(
                 label,
@@ -229,30 +252,46 @@ class _OptionCard extends StatelessWidget {
   }
 }
 
-IconData _iconForLabel(String label) {
+Widget _iconOrImageForLabel(String label) {
   switch (label) {
     case 'Book A Ride':
-      return Icons.location_pin;
+      return Image.asset('assets/p-07.png', width: 40, height: 40);
     case 'Ride History':
-      return Icons.history;
+      return Image.asset('assets/p-08.png', width: 40, height: 40);
     case 'Profile':
-      return Icons.person;
+      return Icon(Icons.person, size: 40, color: Colors.orange);
     case 'Logout':
-      return Icons.logout;
+      return Image.asset('assets/p-06.png', width: 40, height: 40);
     default:
-      return Icons.help_outline;
+      return Icon(Icons.help_outline, size: 40, color: Colors.orange);
   }
 }
 
-IconData _iconForNotificationType(String type) {
+Widget _imageForNotificationType(String type) {
   switch (type) {
     case 'booking':
-      return Icons.directions_bike;
+      return Image.asset(
+        'assets/p-01.png',
+        width: 50,
+        height: 50,
+      );
     case 'profile':
-      return Icons.person;
+      return const Icon(
+        Icons.person_outline,
+        size: 50,
+        color: Colors.orange,
+      );
     case 'promotion':
-      return Icons.local_offer;
+      return const Icon(
+        Icons.local_offer,
+        size: 50,
+        color: Colors.orange,
+      );
     default:
-      return Icons.notifications;
+      return const Icon(
+        Icons.notifications,
+        size: 28,
+        color: Colors.orange,
+      );
   }
 }

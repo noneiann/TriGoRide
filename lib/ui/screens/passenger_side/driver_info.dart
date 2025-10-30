@@ -13,10 +13,11 @@ import '../../../main.dart';
 import '../../root_page_passenger.dart';
 import '../passenger_side/rating_dialog.dart';
 import '../../../services/auth_services.dart';
+import '../../../services/noti_services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final CloudinaryObject cloudinary =
-CloudinaryObject.fromCloudName(cloudName: 'dgu4lwrwn');
+    CloudinaryObject.fromCloudName(cloudName: 'dgu4lwrwn');
 
 class DriverInfoScreen extends StatefulWidget {
   final String driverUid;
@@ -52,7 +53,8 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
     super.initState();
     _driverLocation = widget.initialDriverLocation;
     _loadTricycleIcon();
-    _bookingSub = _authService.firestore.collection('bookings')
+    _bookingSub = _authService.firestore
+        .collection('bookings')
         .doc(widget.bookingId)
         .snapshots()
         .listen(_onBookingUpdate);
@@ -63,31 +65,116 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
     final user = _authService.getUser();
     if (user == null) return;
 
-    final doc = await _authService.firestore
-        .collection('users')
-        .doc(user.email)
-        .get();
+    final doc =
+        await _authService.firestore.collection('users').doc(user.email).get();
 
     final raw = doc.data()?['emergencyNum']?.toString();
     if (raw == null || raw.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No emergency number found')),
+        const SnackBar(
+          content: Text(
+              'No emergency contact found. Please add one in your profile.'),
+          duration: Duration(seconds: 3),
+        ),
       );
       return;
     }
 
-    final number = raw.replaceAll(RegExp(r'\D'), '');
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 32),
+            SizedBox(width: 8),
+            Text('Emergency SOS'),
+          ],
+        ),
+        content: const Text(
+          'This will:\n\n'
+          '• Call your emergency contact\n'
+          '• Send your live location via SMS\n'
+          '• Notify TriGoRide support\n\n'
+          'Use only in case of emergency.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('ACTIVATE SOS'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     try {
-      // On Android: places the call directly (with runtime CALL_PHONE permission prompt)
-      // On iOS: opens the dialer with the number pre-filled
-      await FlutterPhoneDirectCaller.callNumber(number);
+      // Get current location
+      String locationMessage = '';
+      if (_driverLocation != null) {
+        final lat = _driverLocation!.latitude;
+        final lng = _driverLocation!.longitude;
+        locationMessage =
+            'Current location: https://maps.google.com/?q=$lat,$lng';
+      }
+
+      // Get user details
+      final userName = doc.data()?['username'] ?? 'Unknown';
+
+      // Send SMS with location
+      final phoneNumber = raw.replaceAll(RegExp(r'\D'), '');
+      if (phoneNumber.isNotEmpty) {
+        final formattedPhone =
+            phoneNumber.startsWith('0') ? phoneNumber : '0$phoneNumber';
+
+        await NotiService().sendSMS(
+          phoneNumber: formattedPhone,
+          message: '🚨 EMERGENCY SOS from $userName!\n\n'
+              'I need help! Currently in a TriGoRide tricycle.\n\n'
+              '$locationMessage\n\n'
+              'Booking ID: ${widget.bookingId}\n\n'
+              'Please call me immediately!',
+        );
+      }
+
+      // Log SOS in Firestore
+      await _authService.firestore.collection('sos_alerts').add({
+        'userId': user.email,
+        'userName': userName,
+        'bookingId': widget.bookingId,
+        'driverUid': widget.driverUid,
+        'location': _driverLocation != null
+            ? GeoPoint(_driverLocation!.latitude, _driverLocation!.longitude)
+            : null,
+        'timestamp': Timestamp.now(),
+        'emergencyContact': phoneNumber,
+      });
+
+      // Call emergency number
+      await FlutterPhoneDirectCaller.callNumber(phoneNumber);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('SOS activated! Emergency contact notified.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error placing call: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error activating SOS: $e')),
+        );
+      }
     }
   }
-
 
   Future<void> _loadTricycleIcon() async {
     _tricycleIcon = await BitmapDescriptor.asset(
@@ -103,9 +190,9 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         .where('driverId', isEqualTo: widget.driverUid)
         .get();
     int sumRating = 0;
-    for(var rating in ratings.docs) {
+    for (var rating in ratings.docs) {
       final data = rating.data() as Map<String, dynamic>;
-     sumRating += data['rating'] as int;
+      sumRating += data['rating'] as int;
     }
 
     setState(() {
@@ -131,7 +218,7 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
               Navigator.of(context).pop(); // dismiss dialog
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const RootPagePassenger()),
-                    (route) => false,
+                (route) => false,
               );
             },
           ),
@@ -182,150 +269,158 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
       ));
     }
 
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Driver on the Way'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            tooltip: 'SOS',
+            onPressed: _handleSOS,
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _authService.firestore
+                .collection('bookings')
+                .doc(widget.bookingId)
+                .snapshots(),
+            builder: (ctx, snap) {
+              if (!snap.hasData || !snap.data!.exists) {
+                // still loading booking
+                return const Center(child: CircularProgressIndicator());
+              }
 
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Driver on the Way'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.warning_amber_rounded, color: Colors.red),
-              tooltip: 'SOS',
-              onPressed: _handleSOS,
-            ),
-          ],
-        ),
+              final data = snap.data!.data()!;
+              final gp = data['driverLocation'] as GeoPoint?;
+              if (gp != null) {
+                _driverLocation = LatLng(gp.latitude, gp.longitude);
+                // animate camera once per update
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _mapController?.animateCamera(
+                    CameraUpdate.newLatLng(_driverLocation!),
+                  );
+                });
+              }
 
-        body: Stack(
-          children: [
+              final markers = <Marker>{
+                Marker(
+                  markerId: const MarkerId('pickup'),
+                  position: widget.pickUp,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueOrange),
+                ),
+                Marker(
+                  markerId: const MarkerId('dropoff'),
+                  position: widget.dropOff,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueRed),
+                ),
+              };
+              if (_driverLocation != null) {
+                markers.add(Marker(
+                  markerId: const MarkerId('driver'),
+                  position: _driverLocation!,
+                  icon: _tricycleIcon,
+                  infoWindow: const InfoWindow(title: 'Your Driver'),
+                ));
+              }
 
-            StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: _authService.firestore
-                  .collection('bookings')
-                  .doc(widget.bookingId)
-                  .snapshots(),
-              builder: (ctx, snap) {
-                if (!snap.hasData || !snap.data!.exists) {
-                  // still loading booking
-                  return const Center(child: CircularProgressIndicator());
-                }
+              return GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: widget.initialDriverLocation ?? widget.pickUp,
+                  zoom: widget.initialDriverLocation != null ? 17 : 15,
+                ),
+                markers: markers,
+                onMapCreated: (ctrl) => _mapController = ctrl,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: false,
+              );
+            },
+          ),
+          FutureBuilder<QuerySnapshot>(
+            future: _authService.firestore
+                .collection('users')
+                .where('uid', isEqualTo: widget.driverUid)
+                .limit(1)
+                .get(),
+            builder: (ctx, snap) {
+              if (snap.connectionState != ConnectionState.done ||
+                  !snap.hasData ||
+                  snap.data!.docs.isEmpty) {
+                return const SizedBox.shrink();
+              }
+              final d = snap.data!.docs.first.data() as Map<String, dynamic>;
+              final profileImage = d['profileImage'] as Map<String, dynamic>?;
+              final fetchedProfileId =
+                  profileImage?['publicId'] as String? ?? '';
 
-                final data = snap.data!.data()!;
-                final gp = data['driverLocation'] as GeoPoint?;
-                if (gp != null) {
-                  _driverLocation = LatLng(gp.latitude, gp.longitude);
-                  // animate camera once per update
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _mapController?.animateCamera(
-                      CameraUpdate.newLatLng(_driverLocation!),
-                    );
-                  });
-                }
-
-                final markers = <Marker>{
-                  Marker(
-                    markerId: const MarkerId('pickup'),
-                    position: widget.pickUp,
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                  ),
-                  Marker(
-                    markerId: const MarkerId('dropoff'),
-                    position: widget.dropOff,
-                    icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-                  ),
-                };
-                if (_driverLocation != null) {
-                  markers.add(Marker(
-                    markerId: const MarkerId('driver'),
-                    position: _driverLocation!,
-                    icon: _tricycleIcon,
-                    infoWindow: const InfoWindow(title: 'Your Driver'),
-                  ));
-                }
-
-                return GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: widget.initialDriverLocation ?? widget.pickUp,
-                    zoom: widget.initialDriverLocation != null ? 17 : 15,
-                  ),
-                  markers: markers,
-                  onMapCreated: (ctrl) => _mapController = ctrl,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: false,
-                );
-              },
-            ),
-
-            FutureBuilder<QuerySnapshot>(
-              future: _authService.firestore
-                  .collection('users')
-                  .where('uid', isEqualTo: widget.driverUid)
-                  .limit(1)
-                  .get(),
-              builder: (ctx, snap) {
-                if (snap.connectionState != ConnectionState.done ||
-                    !snap.hasData ||
-                    snap.data!.docs.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                final d = snap.data!.docs.first.data() as Map<String, dynamic>;
-                final profileImage = d['profileImage'] as Map<String, dynamic>?;
-                final fetchedProfileId = profileImage?['publicId'] as String? ?? '';
-
-                return Positioned(
-                  left: 16, right: 16, bottom: 16,
-                  child: Card(
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              ClipOval(
-                                child: CldImageWidget(
-                                  cloudinary: cloudinary,
-                                  publicId: fetchedProfileId ?? 'samples/placeholder',
-                                  width: 60, height: 60, fit: BoxFit.cover,
-                                  transformation: Transformation()
-                                    ..addTransformation('ar_1.0,c_fill,w_100/r_max/f_png'),
-                                ),
+              return Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: Card(
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            ClipOval(
+                              child: CldImageWidget(
+                                cloudinary: cloudinary,
+                                publicId:
+                                    fetchedProfileId ?? 'samples/placeholder',
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                transformation: Transformation()
+                                  ..addTransformation(
+                                      'ar_1.0,c_fill,w_100/r_max/f_png'),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Text(
-                                  d['username'] ?? 'Unknown',
-                                  style: theme.textTheme.titleMedium,
-                                ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                d['username'] ?? 'Unknown',
+                                style: theme.textTheme.titleMedium,
                               ),
-                              Icon(Icons.star, color: theme.colorScheme.secondary),
-                              const SizedBox(width: 4),
-                              Text(
-                                _driverRating != null
-                                    ? (_driverRating ?? 0.0 as num).toStringAsFixed(1)
-                                    : '-',
-                                style: theme.textTheme.titleSmall
-                                    ?.copyWith(color: theme.colorScheme.secondary),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 24),
-                          _buildInfoTile('Email', d['email'] ?? 'N/A', theme),
-                          _buildInfoTile('Phone', d['phone'] ?? 'N/A', theme),
-                          _buildInfoTile('Plate Number', d['plateNumber'] ?? 'N/A', theme),
-                        ],
-                      ),
+                            ),
+                            Icon(Icons.star,
+                                color: theme.colorScheme.secondary),
+                            const SizedBox(width: 4),
+                            Text(
+                              _driverRating != null
+                                  ? (_driverRating ?? 0.0 as num)
+                                      .toStringAsFixed(1)
+                                  : '-',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                  color: theme.colorScheme.secondary),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        _buildInfoTile('Email', d['email'] ?? 'N/A', theme),
+                        _buildInfoTile('Phone', d['phone'] ?? 'N/A', theme),
+                        _buildInfoTile(
+                            'Plate Number', d['plateNumber'] ?? 'N/A', theme),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
-          ],
-        ),
-      );
-    }
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildInfoTile(String label, String value, ThemeData theme) {
     return Padding(
