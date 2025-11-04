@@ -217,11 +217,13 @@ class _BookRideScreenState extends State<BookRideScreen> {
     return getServiceFee(_baseRideCost);
   }
 
-  // This is the base cost stored in database (0 for special rides)
+  // This is the base cost stored in database
   double get _baseRideCostForDatabase {
     if (_selectedPriority == 'special') {
-      // For special rides, deduct service fee from special amount
-      return _enteredSpecialAmount - _serviceFeeAmount;
+      // For special rides, the entered amount IS the base
+      final baseSpecial =
+          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      return baseSpecial;
     }
     return _baseRideCost;
   }
@@ -229,10 +231,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
   // This is the final total fare the passenger will pay
   double get _totalPayableFare {
     if (_selectedPriority == 'special') {
-      // For special rides, charge entered amount with minimum of 60 pesos (not per head)
-      final specialAmount =
-          _enteredSpecialAmount < 60 ? 60 : _enteredSpecialAmount;
-      return double.parse(specialAmount.toStringAsFixed(2));
+      // For special rides, total = base special amount + service fee (not per head)
+      final baseSpecial =
+          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      final serviceFee = getServiceFee(baseSpecial);
+      final total = baseSpecial + serviceFee;
+      return double.parse(total.toStringAsFixed(2));
     }
     // For regular rides, charge (base fare + service fee) * passenger count (per head)
     double farePerPerson = _baseRideCost + _serviceFeeAmount;
@@ -472,9 +476,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
         'Passengers: $_passengerCount\n\n';
 
     if (_selectedPriority == 'special') {
-      // For special rides, only show the special amount (no base fee or service fee)
-      dialogContent +=
-          'Special Fare: ₱${_enteredSpecialAmount.toStringAsFixed(2)}\n';
+      // For special rides, show base special amount and service fee
+      final baseSpecial =
+          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      final serviceFee = getServiceFee(baseSpecial);
+      dialogContent += 'Base Special Fare: ₱${baseSpecial.toStringAsFixed(2)}\n'
+          'Service Fee (10%): ₱${serviceFee.toStringAsFixed(2)}\n';
     } else {
       // For regular rides, show breakdown
       dialogContent += 'Base Ride Cost: ₱${_baseRideCost.toStringAsFixed(2)}\n'
@@ -799,9 +806,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         child: TextFormField(
                           controller: _specialAmountController,
                           decoration: InputDecoration(
-                            labelText: 'Your Fare (Total Amount)',
-                            hintText: 'Enter your fare amount',
-                            helperText: 'No base fee - you set the price',
+                            labelText: 'Base Fare Amount',
+                            hintText: 'Enter base fare amount',
+                            helperText:
+                                '10% service fee will be added to total',
                             prefixText: '₱ ',
                             border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8)),
