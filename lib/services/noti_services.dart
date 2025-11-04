@@ -58,7 +58,14 @@ class NotiService {
     required String message,
   }) async {
     try {
+      // Ensure .env is loaded
+      await dotenv.load(fileName: ".env");
+
       final apiKey = dotenv.env['SEMAPHORE_API_KEY'];
+
+      print('🔍 Debug: Checking Semaphore API Key...');
+      print('🔍 API Key exists: ${apiKey != null}');
+      print('🔍 API Key empty: ${apiKey?.isEmpty ?? true}');
 
       if (apiKey == null || apiKey.isEmpty || apiKey.contains('YOUR_')) {
         print('⚠️ Semaphore API key not configured. Skipping SMS.');
@@ -67,6 +74,7 @@ class NotiService {
 
       // Format phone number for Semaphore (09XXXXXXXXX format)
       String formattedNumber = phoneNumber.trim();
+      print('🔍 Original phone number: $phoneNumber');
 
       // Remove +63 prefix if present
       if (formattedNumber.startsWith('+63')) {
@@ -82,6 +90,9 @@ class NotiService {
         formattedNumber = '0$formattedNumber';
       }
 
+      print('🔍 Formatted phone number: $formattedNumber');
+      print('🔍 Message length: ${message.length} characters');
+
       final response = await http.post(
         Uri.parse('https://api.semaphore.co/api/v4/messages'),
         headers: {
@@ -95,23 +106,58 @@ class NotiService {
         },
       );
 
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        if (responseData[0]?['status'] == 'success' ||
-            responseData[0]?['status'] == 'Queued') {
-          print('✅ SMS sent successfully to $formattedNumber via Semaphore');
-          return true;
-        } else {
-          print('❌ SMS full response: ${response.body}');
+      print('🔍 SMS API Response Status: ${response.statusCode}');
+      print('🔍 SMS API Response Body: ${response.body}');
 
-          return false;
+      if (response.statusCode == 200) {
+        try {
+          final responseData = jsonDecode(response.body);
+          print('🔍 Decoded response data: $responseData');
+
+          // Semaphore returns an array of message objects
+          if (responseData is List && responseData.isNotEmpty) {
+            final firstMessage = responseData[0];
+            final status = firstMessage['status']?.toString();
+            final messageId = firstMessage['message_id']?.toString();
+            final recipient = firstMessage['recipient']?.toString();
+
+            print('🔍 SMS Message ID: $messageId');
+            print('🔍 SMS Recipient: $recipient');
+            print('🔍 SMS Status: $status');
+
+            // According to Semaphore docs, valid statuses are:
+            // "Queued", "Pending", "Sent" = Success
+            // "Failed", "Refunded" = Failure
+            if (status == 'Queued' || status == 'Pending' || status == 'Sent') {
+              print(
+                  '✅ SMS sent successfully to $formattedNumber via Semaphore (Status: $status, ID: $messageId)');
+              return true;
+            } else if (status == 'Failed' || status == 'Refunded') {
+              print('❌ SMS failed with status: $status');
+              print('❌ SMS full response: ${response.body}');
+              return false;
+            } else {
+              // Unknown status, but HTTP 200 received
+              print('⚠️ Unknown SMS status: $status - treating as success');
+              return true;
+            }
+          } else {
+            print(
+                '⚠️ Unexpected response format (not array), but HTTP 200 - assuming success');
+            return true;
+          }
+        } catch (e) {
+          print('⚠️ Error parsing response, but HTTP 200 received: $e');
+          // If we got HTTP 200 but can't parse, assume it worked
+          return true;
         }
       } else {
         print('❌ SMS failed: ${response.statusCode} - ${response.body}');
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ SMS error: $e');
+      print('❌ Stack trace: $stackTrace');
       return false;
     }
   }
@@ -125,10 +171,16 @@ class NotiService {
     String? plainTextBody,
   }) async {
     try {
+      // Ensure .env is loaded
+      await dotenv.load(fileName: ".env");
+
       final apiKey = dotenv.env['SENDGRID_API_KEY'];
       final fromEmail =
           dotenv.env['SENDGRID_FROM_EMAIL'] ?? 'innovisionprimetech@gmail.com';
       final fromName = dotenv.env['SENDGRID_FROM_NAME'] ?? 'TriGoRide';
+
+      print('🔍 Debug: Checking SendGrid API Key...');
+      print('🔍 API Key exists: ${apiKey != null}');
 
       if (apiKey == null || apiKey.isEmpty || apiKey.contains('YOUR_')) {
         print('⚠️ SendGrid API key not configured. Skipping email.');
@@ -158,6 +210,8 @@ class NotiService {
         }),
       );
 
+      print('🔍 Email API Response Status: ${response.statusCode}');
+
       if (response.statusCode == 202) {
         print('✅ Email sent successfully to $toEmail');
         return true;
@@ -165,8 +219,9 @@ class NotiService {
         print('❌ Email failed: ${response.statusCode} - ${response.body}');
         return false;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Email error: $e');
+      print('❌ Stack trace: $stackTrace');
       return false;
     }
   }

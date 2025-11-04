@@ -122,6 +122,8 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
         final lng = _driverLocation!.longitude;
         locationMessage =
             'Current location: https://maps.google.com/?q=$lat,$lng';
+      } else {
+        locationMessage = 'Location unavailable';
       }
 
       // Get user details
@@ -129,21 +131,41 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
 
       // Send SMS with location
       final phoneNumber = raw.replaceAll(RegExp(r'\D'), '');
-      if (phoneNumber.isNotEmpty) {
-        final formattedPhone =
-            phoneNumber.startsWith('0') ? phoneNumber : '0$phoneNumber';
+      print('🔍 SOS: Emergency number from DB: $raw');
+      print('🔍 SOS: Cleaned phone number: $phoneNumber');
 
-        await NotiService().sendSMS(
-          phoneNumber: formattedPhone,
-          message: '🚨 EMERGENCY SOS from $userName!\n\n'
-              'I need help! Currently in a TriGoRide tricycle.\n\n'
-              '$locationMessage\n\n'
-              'Booking ID: ${widget.bookingId}\n\n'
-              'Please call me immediately!',
-        );
+      if (phoneNumber.isEmpty) {
+        throw Exception('Invalid phone number format');
+      }
+
+      final formattedPhone =
+          phoneNumber.startsWith('0') ? phoneNumber : '0$phoneNumber';
+
+      print('🔍 SOS: Formatted phone number: $formattedPhone');
+
+      // Send SMS
+      print('🔍 SOS: Attempting to send SMS...');
+      final smsMessage = 'EMERGENCY SOS from $userName! '
+          'I need help! Currently in a TriGoRide tricycle. '
+          '$locationMessage '
+          'Booking ID: ${widget.bookingId} '
+          'Please call me immediately!';
+
+      print('🔍 SOS: Message to send: $smsMessage');
+
+      final smsSent = await NotiService().sendSMS(
+        phoneNumber: formattedPhone,
+        message: smsMessage,
+      );
+
+      print('🔍 SOS: SMS sent result: $smsSent');
+
+      if (!smsSent) {
+        print('⚠️ SOS: SMS failed to send, but continuing with other actions');
       }
 
       // Log SOS in Firestore
+      print('🔍 SOS: Logging to Firestore...');
       await _authService.firestore.collection('sos_alerts').add({
         'userId': user.email,
         'userName': userName,
@@ -154,23 +176,38 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
             : null,
         'timestamp': Timestamp.now(),
         'emergencyContact': phoneNumber,
+        'smsSent': smsSent,
       });
 
+      print('🔍 SOS: Firestore log created');
+
       // Call emergency number
+      print('🔍 SOS: Initiating call to $phoneNumber');
       await FlutterPhoneDirectCaller.callNumber(phoneNumber);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('SOS activated! Emergency contact notified.'),
+          SnackBar(
+            content: Text(
+              smsSent
+                  ? 'SOS activated! Emergency contact notified via SMS and call.'
+                  : 'SOS activated! Calling emergency contact. (SMS may have failed - check network)',
+            ),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ SOS Error: $e');
+      print('❌ Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error activating SOS: $e')),
+          SnackBar(
+            content: Text('Error activating SOS: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
