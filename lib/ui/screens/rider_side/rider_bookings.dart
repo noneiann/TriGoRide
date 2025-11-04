@@ -102,6 +102,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
         final String pickUpAddress = d['pickUpAddress'] as String? ?? '';
         final String dropOffAddress = d['dropOffAddress'] as String? ?? '';
         final fare = d['fare'] ?? '';
+        final int passengerCount = d['passengerCount'] as int? ?? 1;
 
         // Query users collection for this username
         String phoneNumber = 'N/A';
@@ -130,6 +131,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
             'dropOff': dropoffGP,
             'dropOffAddress': dropOffAddress,
             'fare': fare,
+            'passengerCount': passengerCount,
             'datetime': ts.toDate(),
             'status': d['status'] as String? ?? 'N/A',
           };
