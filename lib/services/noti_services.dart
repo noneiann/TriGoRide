@@ -10,7 +10,7 @@ class NotiService {
   /// Initialize the plugin (call in main and in background handler)
   Future<void> init() async {
     const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@drawable/trigoridelogo1');
     const initSettings = InitializationSettings(
       android: androidSettings,
     );
@@ -38,6 +38,7 @@ class NotiService {
       channelDescription: 'General notifications',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@drawable/trigoridelogo1',
     );
 
     const platformDetails = NotificationDetails(
@@ -277,7 +278,7 @@ Driver is on the way. Track your ride in the TriGoRide app.
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚖 Ride Completed!</h1>
+      <h1> 🛺 Ride Completed!</h1>
     </div>
     <div class="content">
       <p>Hi <strong>$passengerName</strong>,</p>
@@ -305,10 +306,6 @@ Driver is on the way. Track your ride in the TriGoRide app.
       </div>
       
       <p>We hope you had a great experience! Don't forget to rate your driver in the app.</p>
-      
-      <center>
-        <a href="https://trigoride.com/rides" class="button">View Ride History</a>
-      </center>
     </div>
     
     <div class="footer">
