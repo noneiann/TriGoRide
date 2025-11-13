@@ -164,14 +164,11 @@ See [DOCUMENTATION.md](DOCUMENTATION.md) for detailed installation instructions.
 - **SendGrid** - Email receipts (100 free emails/day)
 - **Semaphore API** - SMS alerts for Philippine numbers
 
-See [SMS_EMAIL_SETUP.md](SMS_EMAIL_SETUP.md) for setup instructions.
-
 ---
 
 ## � Documentation
 
 - **[Complete Documentation](DOCUMENTATION.md)** - Full technical specifications, architecture, and API references
-- **[SMS & Email Setup Guide](SMS_EMAIL_SETUP.md)** - Configure notification services
 
 ---
 
