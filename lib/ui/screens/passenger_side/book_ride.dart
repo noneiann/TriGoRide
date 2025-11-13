@@ -26,8 +26,7 @@ Future<String?> getNearestPlace(double lat, double lng) async {
     'key': key,
     'location': '$lat,$lng',
     'rankby': 'distance',
-    'type':
-        'establishment', // You might want to broaden this or use 'point_of_interest'
+    'type': 'establishment',
   };
   final url = Uri.https(
     'maps.googleapis.com',
@@ -65,7 +64,6 @@ Future<String?> getNearestPlace(double lat, double lng) async {
 
   // Log each name/vicinity for clarity
   // Using a more robust way to pick a meaningful name, e.g., the first non-route/political result or closest one.
-  // For now, let's try to find one with a 'name' that's not just coordinates.
   for (var i = 0; i < results.length; i++) {
     final poi = results[i] as Map<String, dynamic>;
     final name = poi['name'] as String?;
@@ -104,21 +102,20 @@ class _BookRideScreenState extends State<BookRideScreen> {
   Set<Polyline> _polylines = {};
   GoogleMapController? _mapController;
 
-  String _selectedPriority =
-      'regular'; // Default option: 'regular' or 'special'
+  String _selectedPriority = 'regular';
   final TextEditingController _specialAmountController =
       TextEditingController();
   double _enteredSpecialAmount = 0.0;
-  int _passengerCount = 1; // Number of passengers (default 1)
+  int _passengerCount = 1;
 
   double _getZoomLevel() {
     final d = _distanceKm;
-    if (d < 1) return 16; // under 1 km
-    if (d < 5) return 14; // 1–5 km
-    if (d < 10) return 13; // 5–10 km
-    if (d < 20) return 12; // 10–20 km
-    if (d < 50) return 10; // 20–50 km
-    return 8; // farther out
+    if (d < 1) return 16;
+    if (d < 5) return 14;
+    if (d < 10) return 13;
+    if (d < 20) return 12;
+    if (d < 50) return 10;
+    return 8;
   }
 
   @override
@@ -138,7 +135,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
   Future<void> _loadPassengerAndCheckActive() async {
     final email = _authService.getUser()?.email;
     if (email == null) return;
-    // It's good practice to check if mounted before setState after async operations.
     if (!mounted) return;
     final userDoc =
         await _authService.firestore.collection('users').doc(email).get();
@@ -175,7 +171,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
   double _toRad(double deg) => deg * pi / 180;
 
   double _calcKm(LatLng a, LatLng b) {
-    const R = 6371; // km
+    const R = 6371;
     final dLat = _toRad(b.latitude - a.latitude);
     final dLon = _toRad(b.longitude - a.longitude);
     final lat1 = _toRad(a.latitude);
@@ -194,33 +190,25 @@ class _BookRideScreenState extends State<BookRideScreen> {
       : 0.0;
 
   double getServiceFee(double baseFare) {
-    return baseFare * 0.1; // 10% service fee
+    return baseFare * 0.1;
   }
 
-  // This is the base cost of the ride before any fees or special amounts
+  // BASE RIDE COST CALCULATION
   double get _baseRideCost {
     if (_pickUp == null || _dropOff == null) return 0.0;
-    final raw =
-        (_distanceM / 2000); // Assuming 2000m is a unit for fare calculation
-    final double fare =
-        raw < 1 ? 15 : 15 + (raw * 1.5); // ₱15 base, + ₱1.5 per 2000m unit
+    final raw = (_distanceKm * 7.50);
+    final double fare = _distanceKm < 2 ? 15 : raw;
     return fare;
   }
 
-  // This is the calculated service fee based on the base ride cost
+  // SERVICE FEE CALCULATION
   double get _serviceFeeAmount {
-    if (_selectedPriority == 'special') {
-      // For special rides, calculate service fee from the special amount
-      return getServiceFee(_enteredSpecialAmount);
-    }
-    // For regular rides, calculate from base ride cost
     return getServiceFee(_baseRideCost);
   }
 
-  // This is the base cost stored in database
+  // BASE COST FOR DATABASE STORAGE
   double get _baseRideCostForDatabase {
     if (_selectedPriority == 'special') {
-      // For special rides, the entered amount IS the base
       final baseSpecial =
           _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
       return baseSpecial;
@@ -228,17 +216,15 @@ class _BookRideScreenState extends State<BookRideScreen> {
     return _baseRideCost;
   }
 
-  // This is the final total fare the passenger will pay
+  // TOTAL FARE CALCULATION
   double get _totalPayableFare {
     if (_selectedPriority == 'special') {
-      // For special rides, total = base special amount + service fee (not per head)
       final baseSpecial =
           _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
-      final serviceFee = getServiceFee(baseSpecial);
+      final serviceFee = _serviceFeeAmount;
       final total = baseSpecial + serviceFee;
       return double.parse(total.toStringAsFixed(2));
     }
-    // For regular rides, charge (base fare + service fee) * passenger count (per head)
     double farePerPerson = _baseRideCost + _serviceFeeAmount;
     double totalFare = farePerPerson * _passengerCount;
     return double.parse(totalFare.toStringAsFixed(2));
@@ -248,15 +234,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
     await dotenv.load(fileName: ".env");
     final key = dotenv.get('GOOGLEMAPS_APIKEY');
 
-    // Oroquieta City approximate center coordinates and radius
-    // Center: 8.4858° N, 123.8050° E
-    // Radius: 30km to cover the city area and surrounding barangays
     final url =
         Uri.https('maps.googleapis.com', '/maps/api/place/textsearch/json', {
       'key': key,
       'query': name,
-      'location': '8.4858,123.8050', // Oroquieta City center
-      'radius': '30000', // 30km radius
+      'location': '8.4858,123.8050',
+      'radius': '30000',
     });
 
     final res = await http.get(url);
@@ -352,14 +335,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
     if (res == null) return;
     final puName = res['pickup']!, doName = res['dropoff']!;
 
-    // Append "Oroquieta City" to restrict voice hailing to the city
     final puQuery = '$puName, Oroquieta City, Philippines';
     final doQuery = '$doName, Oroquieta City, Philippines';
 
     final pu = await _getCoordinatesFromName(puQuery);
     final dof = await _getCoordinatesFromName(doQuery);
 
-    // Validate that locations are within Oroquieta City (approximately 10km radius from center)
     if (pu != null && !_isWithinOroquietaCity(pu)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -411,7 +392,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
     }
   }
 
-  /// Check if a location is within Oroquieta City bounds (approx 30km radius from center)
   bool _isWithinOroquietaCity(LatLng location) {
     const oroquietaCenter = LatLng(8.4858, 123.8050);
     const maxDistanceKm = 30.0;
@@ -426,7 +406,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
     return distance <= maxDistanceKm;
   }
 
-  /// Calculate distance between two coordinates using Haversine formula (in kilometers)
   double _calculateDistance(
       double lat1, double lon1, double lat2, double lon2) {
     const earthRadiusKm = 6371.0;
@@ -476,14 +455,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
         'Passengers: $_passengerCount\n\n';
 
     if (_selectedPriority == 'special') {
-      // For special rides, show base special amount and service fee
       final baseSpecial =
           _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
-      final serviceFee = getServiceFee(baseSpecial);
+      final serviceFee = _serviceFeeAmount;
       dialogContent += 'Base Special Fare: ₱${baseSpecial.toStringAsFixed(2)}\n'
-          'Service Fee (10%): ₱${serviceFee.toStringAsFixed(2)}\n';
+          'Service Fee (10% of distance-based): ₱${serviceFee.toStringAsFixed(2)}\n';
     } else {
-      // For regular rides, show breakdown
       dialogContent += 'Base Ride Cost: ₱${_baseRideCost.toStringAsFixed(2)}\n'
           'Service Fee: ₱${_serviceFeeAmount.toStringAsFixed(2)}\n';
     }
@@ -517,13 +494,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
       'dropOff': GeoPoint(dof.latitude, dof.longitude),
       'dropOffAddress': _dropOffAddress,
       'fare': _totalPayableFare,
-      'baseRideCost':
-          _baseRideCostForDatabase, // For special rides: special amount - service fee
-      'serviceFee': _serviceFeeAmount, // Always 10% of base or special amount
+      'baseRideCost': _baseRideCostForDatabase,
+      'serviceFee': _serviceFeeAmount,
       'priorityType': _selectedPriority,
       'specialAmount':
           _selectedPriority == 'special' ? _enteredSpecialAmount : 0.0,
-      'passengerCount': _passengerCount, // Number of passengers riding
+      'passengerCount': _passengerCount,
     });
 
     // Get current user
@@ -584,7 +560,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Map Preview
             Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -602,8 +577,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                             (_pickUp!.latitude + _dropOff!.latitude) / 2,
                             (_pickUp!.longitude + _dropOff!.longitude) / 2,
                           ),
-                          zoom:
-                              _getZoomLevel(), // Adjust zoom dynamically based on distance?
+                          zoom: _getZoomLevel(),
                         ),
                         markers: {
                           Marker(
@@ -624,10 +598,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                             style: theme.textTheme.bodyMedium)),
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Location selectors
             Card(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
@@ -664,13 +635,9 @@ class _BookRideScreenState extends State<BookRideScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // Number of Passengers Selection
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0), // Align with card content
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
                 'Number of Passengers',
                 style: Theme.of(context)
@@ -748,11 +715,8 @@ class _BookRideScreenState extends State<BookRideScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // Ride Priority Selection
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0), // Align with card content
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
                 'Ride Priority',
                 style: Theme.of(context)
@@ -767,7 +731,6 @@ class _BookRideScreenState extends State<BookRideScreen> {
                   borderRadius: BorderRadius.circular(12)),
               elevation: 2,
               child: Theme(
-                // To ensure radio buttons pick up primary color correctly
                 data: Theme.of(context).copyWith(
                   unselectedWidgetColor: Theme.of(context).colorScheme.primary,
                 ),
@@ -831,17 +794,12 @@ class _BookRideScreenState extends State<BookRideScreen> {
                 ),
               ),
             ),
-
-            const SizedBox(
-              height: 24,
-            ),
-            // Summary card
+            const SizedBox(height: 24),
             if (showMap)
               Card(
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
-                color: theme.colorScheme.primaryContainer
-                    .withOpacity(0.3), // Use primaryContainer
+                color: theme.colorScheme.primaryContainer.withOpacity(0.3),
                 elevation: 0,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -866,14 +824,17 @@ class _BookRideScreenState extends State<BookRideScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      _buildSummaryRow(theme, 'Base Ride Cost:',
-                          '₱${_baseRideCost.toStringAsFixed(2)}'),
-                      _buildSummaryRow(theme, 'Service Fee (10%):',
-                          '₱${_serviceFeeAmount.toStringAsFixed(2)}'),
-                      if (_selectedPriority == 'special' &&
-                          _enteredSpecialAmount > 0)
-                        _buildSummaryRow(theme, 'Special Add-on:',
-                            '₱${_enteredSpecialAmount.toStringAsFixed(2)}'),
+                      if (_selectedPriority == 'special') ...[
+                        _buildSummaryRow(theme, 'Base Special Fare:',
+                            '₱${_baseRideCostForDatabase.toStringAsFixed(2)}'),
+                        _buildSummaryRow(theme, 'Service Fee (distance-based):',
+                            '₱${_serviceFeeAmount.toStringAsFixed(2)}'),
+                      ] else ...[
+                        _buildSummaryRow(theme, 'Base Ride Cost:',
+                            '₱${_baseRideCost.toStringAsFixed(2)}'),
+                        _buildSummaryRow(theme, 'Service Fee (10%):',
+                            '₱${_serviceFeeAmount.toStringAsFixed(2)}'),
+                      ],
                       const Divider(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -895,7 +856,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Center(
                 child: IconButton(
-                  iconSize: 128, // you can adjust size
+                  iconSize: 128,
                   icon: Image.asset(
                     'assets/p-10.png',
                     width: 120,
@@ -906,8 +867,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
                 ),
               ),
             ),
-
-            const SizedBox(height: 100), // Space for bottom sheet
+            const SizedBox(height: 100),
           ],
         ),
       ),
