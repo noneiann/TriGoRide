@@ -115,13 +115,41 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
     if (confirmed != true) return;
 
     try {
+      // Get booking details for addresses
+      final bookingDoc = await _authService.firestore
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      final bookingData = bookingDoc.data() as Map<String, dynamic>?;
+      final pickUpAddress =
+          bookingData?['pickUpAddress'] ?? 'Unknown pickup location';
+      final dropOffAddress =
+          bookingData?['dropOffAddress'] ?? 'Unknown dropoff location';
+
+      // Get driver details
+      final driverSnapshot = await _authService.firestore
+          .collection('users')
+          .where('uid', isEqualTo: widget.driverUid)
+          .limit(1)
+          .get();
+
+      String driverName = 'Unknown Driver';
+      String plateNumber = 'Unknown Plate';
+
+      if (driverSnapshot.docs.isNotEmpty) {
+        final driverData =
+            driverSnapshot.docs.first.data() as Map<String, dynamic>;
+        driverName = driverData['username'] ?? 'Unknown Driver';
+        plateNumber = driverData['plateNumber'] ?? 'Unknown Plate';
+      }
+
       // Get current location
       String locationMessage = '';
       if (_driverLocation != null) {
         final lat = _driverLocation!.latitude;
         final lng = _driverLocation!.longitude;
-        locationMessage =
-            'Current location: https://maps.google.com/?q=$lat,$lng';
+        locationMessage = 'https://maps.google.com/?q=$lat,$lng';
       } else {
         locationMessage = 'Location unavailable';
       }
@@ -143,12 +171,19 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
 
       print('🔍 SOS: Formatted phone number: $formattedPhone');
 
-      // Send SMS
+      // Send SMS with comprehensive details
       print('🔍 SOS: Attempting to send SMS...');
-      final smsMessage = 'EMERGENCY SOS from $userName! '
-          'I need help! Currently in a TriGoRide tricycle. '
-          '$locationMessage '
-          'Booking ID: ${widget.bookingId} '
+      final now = DateTime.now();
+      final dateTime = DateFormat('MMM dd, yyyy hh:mm a').format(now);
+
+      final smsMessage = 'EMERGENCY SOS from $userName!\n\n' +
+          'I need help!\n\n' +
+          'Date/Time: $dateTime\n' +
+          'Driver: $driverName\n' +
+          'Plate Number: $plateNumber\n\n' +
+          'From: $pickUpAddress\n' +
+          'To: $dropOffAddress\n\n' +
+          'Live location:\n$locationMessage\n\n' +
           'Please call me immediately!';
 
       print('🔍 SOS: Message to send: $smsMessage');
