@@ -34,7 +34,8 @@ class _LoginPageState extends State<LoginPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter your email address to receive a password reset link.'),
+            const Text(
+                'Enter your email address to receive a password reset link.'),
             const SizedBox(height: 16),
             TextField(
               controller: emailController,
@@ -105,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
           setState(() {
             _loading = false;
           });
-          
+
           // Redirect to email verification screen (keep user signed in)
           if (mounted) {
             Navigator.pushReplacement(

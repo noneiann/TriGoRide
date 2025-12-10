@@ -8,8 +8,7 @@ import '../notifs_page.dart';
 
 class PassengerProfile extends StatelessWidget {
   final _users = AuthService().firestore.collection('users');
-  final _uid   = AuthService().getUser()?.email;
-
+  final _uid = AuthService().getUser()?.email;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +21,8 @@ class PassengerProfile extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => NotificationsPage())),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (context) => NotificationsPage())),
             icon: Icon(Icons.notifications),
           )
         ],
@@ -30,14 +30,14 @@ class PassengerProfile extends StatelessWidget {
         elevation: 0.0,
       ),
       body: SafeArea(
-        child: StreamBuilder< DocumentSnapshot<Map<String, dynamic>> >(
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: _users.doc(_uid).snapshots(),
           builder: (ctx, snap) {
             if (snap.connectionState == ConnectionState.waiting)
               return Center(child: CircularProgressIndicator());
             // snap.data is DocumentSnapshot<Map<String,dynamic>>?
             final docSnap = snap.data;
-            final data    = docSnap?.data();
+            final data = docSnap?.data();
             if (data == null) {
               // no document or empty data
               return Center(child: Text("Profile not found"));
@@ -57,17 +57,17 @@ class PassengerProfile extends StatelessWidget {
 
                 InfoCard(
                   label: 'Email',
-                  content: Text(data['email'] ?? '',
-                      style: TextStyle(fontSize: 16)),
-                  onEdit: () => _navigateToEdit(
-                      context, 'email', 'Email', data['email']),
+                  content:
+                      Text(data['email'] ?? '', style: TextStyle(fontSize: 16)),
+                  onEdit: () =>
+                      _navigateToEdit(context, 'email', 'Email', data['email']),
                 ),
                 SizedBox(height: 12),
 
                 InfoCard(
                   label: 'Mobile number',
-                  content: Text(data['phone'] ?? '',
-                      style: TextStyle(fontSize: 16)),
+                  content:
+                      Text(data['phone'] ?? '', style: TextStyle(fontSize: 16)),
                   onEdit: () => _navigateToEdit(
                       context, 'phone', 'Mobile number', data['phone']),
                 ),
@@ -76,8 +76,8 @@ class PassengerProfile extends StatelessWidget {
                   label: 'Emergency Phone Number',
                   content: Text(data['emergencyNum'] ?? '',
                       style: TextStyle(fontSize: 16)),
-                  onEdit: () => _navigateToEdit(
-                      context, 'emergencyNum', 'Emergency Phone Number', data['emergencyNum']),
+                  onEdit: () => _navigateToEdit(context, 'emergencyNum',
+                      'Emergency Phone Number', data['emergencyNum']),
                 ),
                 SizedBox(height: 24),
                 // Logout Button
@@ -137,8 +137,8 @@ class PassengerProfile extends StatelessWidget {
     }
   }
 
-  void _navigateToEdit(
-      BuildContext context, String fieldKey, String label, String? currentValue) {
+  void _navigateToEdit(BuildContext context, String fieldKey, String label,
+      String? currentValue) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => EditFieldPage(
         fieldKey: fieldKey,
@@ -169,27 +169,37 @@ class InfoCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.cardColor, borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: Offset(0,2))],
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 8,
+              offset: Offset(0, 2))
+        ],
       ),
       child: Stack(
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+            Text(label,
+                style: TextStyle(color: Colors.grey[600], fontSize: 14)),
             SizedBox(height: 8),
             content,
             if (badge != null) ...[
               SizedBox(height: 8),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Color(0xFFEAF4FF), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(
+                    color: Color(0xFFEAF4FF),
+                    borderRadius: BorderRadius.circular(6)),
                 child: badge!,
               ),
             ],
           ]),
           if (onEdit != null)
             Positioned(
-              top: 0, right: 0,
+              top: 0,
+              right: 0,
               child: IconButton(
                 icon: Icon(Icons.edit, size: 20),
                 onPressed: onEdit,
@@ -237,7 +247,7 @@ class _EditFieldPageState extends State<EditFieldPage> {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
-          .update({ widget.fieldKey: _controller.text.trim() });
+          .update({widget.fieldKey: _controller.text.trim()});
       Navigator.of(context).pop();
     } catch (e) {
       setState(() => _saving = false);
@@ -265,7 +275,11 @@ class _EditFieldPageState extends State<EditFieldPage> {
             ElevatedButton(
               onPressed: _saving ? null : _save,
               child: _saving
-                  ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : Text('Save'),
             ),
           ]),

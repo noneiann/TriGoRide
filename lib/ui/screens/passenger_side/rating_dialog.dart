@@ -7,7 +7,7 @@ import '../../../models/rating.dart';
 class EnhancedRatingDialog extends StatefulWidget {
   final String driverId;
   final String bookingId;
-  final String? driverName;           // e.g. 'Juan'
+  final String? driverName; // e.g. 'Juan'
   final VoidCallback onRatingComplete;
 
   const EnhancedRatingDialog({
@@ -23,11 +23,11 @@ class EnhancedRatingDialog extends StatefulWidget {
 }
 
 class _EnhancedRatingDialogState extends State<EnhancedRatingDialog> {
-  int    _rating = 1;
+  int _rating = 1;
   String _comment = '';
-  bool   _isSubmitting = false;
+  bool _isSubmitting = false;
 
-  final _authService   = AuthService();
+  final _authService = AuthService();
   final _ratingService = RatingService();
 
   final List<String> _feedbackOptions = [
@@ -78,8 +78,10 @@ class _EnhancedRatingDialogState extends State<EnhancedRatingDialog> {
                   selected: sel,
                   onSelected: (yes) {
                     setState(() {
-                      if (yes) _selectedTags.add(opt);
-                      else     _selectedTags.remove(opt);
+                      if (yes)
+                        _selectedTags.add(opt);
+                      else
+                        _selectedTags.remove(opt);
                     });
                   },
                 );
@@ -105,10 +107,10 @@ class _EnhancedRatingDialogState extends State<EnhancedRatingDialog> {
                 onPressed: _isSubmitting ? null : _submit,
                 child: _isSubmitting
                     ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('SUBMIT'),
               ),
             ]),
@@ -132,13 +134,13 @@ class _EnhancedRatingDialogState extends State<EnhancedRatingDialog> {
 
     final ts = Timestamp.now();
     final rating = DriverRating(
-      bookingId   : widget.bookingId,
-      driverId    : widget.driverId,
-      passengerId : user.uid,
-      rating      : _rating,
-      comment     : _comment,
+      bookingId: widget.bookingId,
+      driverId: widget.driverId,
+      passengerId: user.uid,
+      rating: _rating,
+      comment: _comment,
       feedbackTags: _selectedTags,
-      timestamp   : ts,
+      timestamp: ts,
     );
 
     try {

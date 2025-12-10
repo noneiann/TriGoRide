@@ -164,7 +164,8 @@ class _RegisterDriverState extends State<RegisterDriver> {
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const EmailVerificationScreen()),
                   );
                 },
                 child: const Text("OK"),
@@ -221,359 +222,360 @@ class _RegisterDriverState extends State<RegisterDriver> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-            // Fixed Logo Container - always at the top.
-            Container(
-                padding: EdgeInsets.only(top: 64),
-                height: 200, // set the image height
-                alignment: Alignment.center,
-                child: Image.asset(
-                  isDark
-                      ? 'assets/TriGoRideLogo1.png'
-                      : 'assets/TriGoRideLogo.png',
-                  height: 240, // set the image height
-                  width: 240, // (optional) set the image width
-                )),
-            SizedBox(height: 50),
-            // The rest of the login UI.
-            Container(
-                width: width,
-                padding: EdgeInsets.symmetric(horizontal: 32),
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Register",
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.headlineLarge?.color,
+              // Fixed Logo Container - always at the top.
+              Container(
+                  padding: EdgeInsets.only(top: 64),
+                  height: 200, // set the image height
+                  alignment: Alignment.center,
+                  child: Image.asset(
+                    isDark
+                        ? 'assets/TriGoRideLogo1.png'
+                        : 'assets/TriGoRideLogo.png',
+                    height: 240, // set the image height
+                    width: 240, // (optional) set the image width
+                  )),
+              SizedBox(height: 50),
+              // The rest of the login UI.
+              Container(
+                  width: width,
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.headlineLarge?.color,
+                        ),
+                        textAlign: TextAlign.left,
                       ),
-                      textAlign: TextAlign.left,
-                    ),
-                    Text("Please register to continue"),
-                  ],
-                )),
+                      Text("Please register to continue"),
+                    ],
+                  )),
 
-            SizedBox(height: 40),
-            Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Profile Photo Picker
-                    GestureDetector(
-                      onTap: _pickProfileImage,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: containerColor,
-                          border: Border.all(
-                            color: _profileImage == null
-                                ? Colors.red
-                                : Colors.green,
-                            width: 3,
+              SizedBox(height: 40),
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Profile Photo Picker
+                      GestureDetector(
+                        onTap: _pickProfileImage,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: containerColor,
+                            border: Border.all(
+                              color: _profileImage == null
+                                  ? Colors.red
+                                  : Colors.green,
+                              width: 3,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: Offset(0, 4),
+                          child: _profileImage != null
+                              ? ClipOval(
+                                  child: Image.file(
+                                    _profileImage!,
+                                    fit: BoxFit.cover,
+                                    width: 120,
+                                    height: 120,
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_a_photo,
+                                      size: 40,
+                                      color: iconColor,
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Add Photo*',
+                                      style: TextStyle(
+                                        color: theme.hintColor,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Profile Photo Required',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.person,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _username,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Username',
+                                  hintStyle: hintTextStyle,
+                                ),
+                              ),
                             ),
                           ],
                         ),
-                        child: _profileImage != null
-                            ? ClipOval(
-                                child: Image.file(
-                                  _profileImage!,
-                                  fit: BoxFit.cover,
-                                  width: 120,
-                                  height: 120,
+                      ),
+                      SizedBox(height: 10),
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.email,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _email,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Email',
+                                  hintStyle: hintTextStyle,
                                 ),
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.add_a_photo,
-                                    size: 40,
-                                    color: iconColor,
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Add Photo*',
-                                    style: TextStyle(
-                                      color: theme.hintColor,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Profile Photo Required',
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    SizedBox(height: 24),
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.person,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _username,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'Username',
-                                hintStyle: hintTextStyle,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.email,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _email,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'Email',
-                                hintStyle: hintTextStyle,
+                      SizedBox(height: 10),
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.phone,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _phoneNumber,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Phone Number',
+                                  hintStyle: hintTextStyle,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.phone,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _phoneNumber,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'Phone Number',
-                                hintStyle: hintTextStyle,
+                      SizedBox(height: 10),
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.directions_car,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _licensePlate,
+                                textCapitalization:
+                                    TextCapitalization.characters,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'License Plate Number*',
+                                  hintStyle: hintTextStyle,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.directions_car,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _licensePlate,
-                              textCapitalization: TextCapitalization.characters,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'License Plate Number*',
-                                hintStyle: hintTextStyle,
+                      SizedBox(height: 10),
+                      // Password Field with show/hide functionality and centered IconButton.
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.lock,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _password,
+                                obscureText: !_showPassword,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Password',
+                                  hintStyle: hintTextStyle,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            SizedBox(width: width * 0.02),
+                            // Center the IconButton in its allocated space.
+                            IconButton(
+                              padding: EdgeInsets.all(0.01),
+                              icon: Icon(
+                                _showPassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              color: iconColor,
+                              onPressed: () {
+                                setState(() {
+                                  _showPassword = !_showPassword;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    // Password Field with show/hide functionality and centered IconButton.
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.lock,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _password,
-                              obscureText: !_showPassword,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'Password',
-                                hintStyle: hintTextStyle,
+                      SizedBox(height: 10),
+                      Container(
+                        width: width * 0.9,
+                        height: height * 0.06,
+                        padding: EdgeInsets.all(width * 0.03),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: containerColor,
+                          border: Border.all(color: borderColor),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Icon(
+                              Icons.lock,
+                              color: iconColor,
+                            ),
+                            SizedBox(width: width * 0.02),
+                            Expanded(
+                              child: TextField(
+                                controller: _confirmPassword,
+                                obscureText: !_showConfirmPassword,
+                                decoration: InputDecoration.collapsed(
+                                  hintText: 'Confirm Password',
+                                  hintStyle: hintTextStyle,
+                                ),
                               ),
                             ),
-                          ),
-                          SizedBox(width: width * 0.02),
-                          // Center the IconButton in its allocated space.
-                          IconButton(
-                            padding: EdgeInsets.all(0.01),
-                            icon: Icon(
-                              _showPassword
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
-                            color: iconColor,
-                            onPressed: () {
-                              setState(() {
-                                _showPassword = !_showPassword;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Container(
-                      width: width * 0.9,
-                      height: height * 0.06,
-                      padding: EdgeInsets.all(width * 0.03),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: containerColor,
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(
-                        children: <Widget>[
-                          Icon(
-                            Icons.lock,
-                            color: iconColor,
-                          ),
-                          SizedBox(width: width * 0.02),
-                          Expanded(
-                            child: TextField(
-                              controller: _confirmPassword,
-                              obscureText: !_showConfirmPassword,
-                              decoration: InputDecoration.collapsed(
-                                hintText: 'Confirm Password',
-                                hintStyle: hintTextStyle,
+                            SizedBox(width: width * 0.02),
+                            // Center the IconButton in its allocated space.
+                            IconButton(
+                              padding: EdgeInsets.all(0.01),
+                              icon: Icon(
+                                _showConfirmPassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
                               ),
+                              color: iconColor,
+                              onPressed: () {
+                                setState(() {
+                                  _showConfirmPassword = !_showConfirmPassword;
+                                });
+                              },
                             ),
-                          ),
-                          SizedBox(width: width * 0.02),
-                          // Center the IconButton in its allocated space.
-                          IconButton(
-                            padding: EdgeInsets.all(0.01),
-                            icon: Icon(
-                              _showConfirmPassword
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
-                            color: iconColor,
-                            onPressed: () {
-                              setState(() {
-                                _showConfirmPassword = !_showConfirmPassword;
-                              });
-                            },
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    // Display error if any.
-                    SizedBox(height: 10),
-                    if (_error.isNotEmpty)
-                      Text(
-                        _error,
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    SizedBox(height: 10),
-                    // Login Button or Progress Indicator.
-                    _loading
-                        ? CircularProgressIndicator()
-                        : ElevatedButton(
-                            onPressed: _register,
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: Size(double.infinity, 50),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                      // Display error if any.
+                      SizedBox(height: 10),
+                      if (_error.isNotEmpty)
+                        Text(
+                          _error,
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      SizedBox(height: 10),
+                      // Login Button or Progress Indicator.
+                      _loading
+                          ? CircularProgressIndicator()
+                          : ElevatedButton(
+                              onPressed: _register,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: Size(double.infinity, 50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                               ),
+                              child: Text("Register"),
                             ),
-                            child: Text("Register"),
-                          ),
-                    SizedBox(height: 10),
-                    // Navigation to registration.
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => LoginPage()),
-                        );
-                      },
-                      child: Text(
-                        "Already have an account? Login",
-                        style: TextStyle(color: Colors.orange),
+                      SizedBox(height: 10),
+                      // Navigation to registration.
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => LoginPage()),
+                          );
+                        },
+                        child: Text(
+                          "Already have an account? Login",
+                          style: TextStyle(color: Colors.orange),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );

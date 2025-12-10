@@ -14,13 +14,11 @@ class AuthService {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
-
   User? getUser() {
     return _auth.currentUser;
   }
 
   Future<void> initFCM() async {
-
     await _fcm.requestPermission(alert: true, badge: true, sound: true);
 
     final String? token = await _fcm.getToken();
@@ -36,13 +34,12 @@ class AuthService {
 
   Future<String> getAccessToken() async {
     final jsonString =
-    await rootBundle.loadString('assets/service-account.json');
+        await rootBundle.loadString('assets/service-account.json');
     final serviceAccount =
-    ServiceAccountCredentials.fromJson(json.decode(jsonString));
+        ServiceAccountCredentials.fromJson(json.decode(jsonString));
 
     final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
-    final client =
-    await clientViaServiceAccount(serviceAccount, scopes);
+    final client = await clientViaServiceAccount(serviceAccount, scopes);
     final token = client.credentials.accessToken.data;
     client.close();
     return token;

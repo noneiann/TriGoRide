@@ -10,7 +10,8 @@ class PassengerBookingsScreen extends StatefulWidget {
   const PassengerBookingsScreen({Key? key}) : super(key: key);
 
   @override
-  State<PassengerBookingsScreen> createState() => _PassengerBookingsScreenState();
+  State<PassengerBookingsScreen> createState() =>
+      _PassengerBookingsScreenState();
 }
 
 class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
@@ -124,7 +125,8 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
           ),
         ),
       ).then((_) => _loadActiveBookings());
-    } else if ((status == 'Accepted' || status == 'In Progress') && assignedRider != null) {
+    } else if ((status == 'Accepted' || status == 'In Progress') &&
+        assignedRider != null) {
       // Get driver location from booking if available
       final driverLocGP = booking['driverLocation'] as GeoPoint?;
       final driverLoc = driverLocGP != null
@@ -202,12 +204,18 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                       itemCount: _activeBookings.length,
                       itemBuilder: (context, index) {
                         final booking = _activeBookings[index];
-                        final status = booking['status'] as String? ?? 'Unknown';
-                        final pickUpAddress = booking['pickUpAddress'] as String? ?? 'Unknown';
-                        final dropOffAddress = booking['dropOffAddress'] as String? ?? 'Unknown';
-                        final fare = (booking['fare'] as num?)?.toDouble() ?? 0.0;
-                        final dateBooked = (booking['dateBooked'] as Timestamp?)?.toDate();
-                        final assignedRider = booking['assignedRider'] as String?;
+                        final status =
+                            booking['status'] as String? ?? 'Unknown';
+                        final pickUpAddress =
+                            booking['pickUpAddress'] as String? ?? 'Unknown';
+                        final dropOffAddress =
+                            booking['dropOffAddress'] as String? ?? 'Unknown';
+                        final fare =
+                            (booking['fare'] as num?)?.toDouble() ?? 0.0;
+                        final dateBooked =
+                            (booking['dateBooked'] as Timestamp?)?.toDate();
+                        final assignedRider =
+                            booking['assignedRider'] as String?;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 16),
@@ -237,7 +245,8 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: _getStatusColor(status),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -262,8 +271,10 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                       const Spacer(),
                                       if (dateBooked != null)
                                         Text(
-                                          DateFormat('MMM dd, h:mm a').format(dateBooked),
-                                          style: theme.textTheme.bodySmall?.copyWith(
+                                          DateFormat('MMM dd, h:mm a')
+                                              .format(dateBooked),
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
                                             color: Colors.grey[600],
                                           ),
                                         ),
@@ -272,13 +283,15 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                   const SizedBox(height: 16),
                                   // Pickup Location
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: Colors.green.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: const Icon(
                                           Icons.trip_origin,
@@ -289,17 +302,20 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Pickup',
-                                              style: theme.textTheme.bodySmall?.copyWith(
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
                                                 color: Colors.grey[600],
                                               ),
                                             ),
                                             Text(
                                               pickUpAddress,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
                                                 fontWeight: FontWeight.w500,
                                               ),
                                               maxLines: 2,
@@ -313,13 +329,15 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                   const SizedBox(height: 12),
                                   // Dropoff Location
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: Colors.red.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
                                         ),
                                         child: const Icon(
                                           Icons.location_on,
@@ -330,17 +348,20 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Drop-off',
-                                              style: theme.textTheme.bodySmall?.copyWith(
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
                                                 color: Colors.grey[600],
                                               ),
                                             ),
                                             Text(
                                               dropOffAddress,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
                                                 fontWeight: FontWeight.w500,
                                               ),
                                               maxLines: 2,
@@ -356,7 +377,8 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                   const SizedBox(height: 12),
                                   // Fare and Driver Info
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Row(
                                         children: [
@@ -368,7 +390,8 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                           const SizedBox(width: 8),
                                           Text(
                                             '₱${fare.toStringAsFixed(2)}',
-                                            style: theme.textTheme.titleMedium?.copyWith(
+                                            style: theme.textTheme.titleMedium
+                                                ?.copyWith(
                                               fontWeight: FontWeight.bold,
                                               color: Colors.orange,
                                             ),
@@ -383,7 +406,8 @@ class _PassengerBookingsScreenState extends State<PassengerBookingsScreen> {
                                           ),
                                           decoration: BoxDecoration(
                                             color: Colors.blue.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,

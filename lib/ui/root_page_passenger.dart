@@ -6,8 +6,8 @@ import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_profile.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_ride_history.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_bookings.dart';
-import 'package:tri_go_ride/ui/login_screen.dart';            // ← your splash/login
-import '../../../services/auth_services.dart';                // ← AuthService
+import 'package:tri_go_ride/ui/login_screen.dart'; // ← your splash/login
+import '../../../services/auth_services.dart'; // ← AuthService
 
 class RootPagePassenger extends StatefulWidget {
   const RootPagePassenger({super.key});

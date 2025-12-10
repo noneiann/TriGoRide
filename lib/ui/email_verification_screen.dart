@@ -7,7 +7,8 @@ class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({Key? key}) : super(key: key);
 
   @override
-  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
+  State<EmailVerificationScreen> createState() =>
+      _EmailVerificationScreenState();
 }
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
@@ -51,7 +52,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
       if (user != null) {
         await user.reload();
         final updatedUser = _authService.getUser();
-        
+
         if (updatedUser != null && updatedUser.emailVerified) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -150,7 +151,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _message.contains('sent') || _message.contains('verified')
+                    color: _message.contains('sent') ||
+                            _message.contains('verified')
                         ? Colors.green.withOpacity(0.1)
                         : Colors.orange.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -158,7 +160,8 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
                   child: Text(
                     _message,
                     style: TextStyle(
-                      color: _message.contains('sent') || _message.contains('verified')
+                      color: _message.contains('sent') ||
+                              _message.contains('verified')
                           ? Colors.green
                           : Colors.orange,
                     ),
