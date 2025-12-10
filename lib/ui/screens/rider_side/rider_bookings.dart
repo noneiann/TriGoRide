@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:location/location.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
@@ -39,6 +40,10 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
   // periodic update timer
   Timer? _locationUpdateTimer;
+
+  // proximity tracking
+  bool _hasShownProximityDialog = false;
+  double? _lastDistance;
 
   @override
   void initState() {
@@ -143,7 +148,6 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
   }
 
   void _startLocationUpdates() {
-    // send every 3 seconds
     _locationUpdateTimer =
         Timer.periodic(const Duration(seconds: 3), (_) async {
       await _sendCurrentLocation();
@@ -156,15 +160,120 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
       if (loc.latitude != null &&
           loc.longitude != null &&
           _acceptedBooking != null) {
+        _currentLatLng = LatLng(loc.latitude!, loc.longitude!);
+
         await _authService.firestore
             .collection('bookings')
             .doc(_acceptedBooking!['id'])
             .update({
           'driverLocation': GeoPoint(loc.latitude!, loc.longitude!),
         });
+
+        // Check proximity to pickup location
+        _checkProximityToPickup();
       }
     } catch (e) {
       debugPrint('Error updating driver location: $e');
+    }
+  }
+
+  void _checkProximityToPickup() {
+    if (_hasShownProximityDialog) return;
+    if (_currentLatLng == null || _acceptedBooking == null) return;
+
+    final bookingStatus = _acceptedBooking!['status'] as String?;
+    if (bookingStatus != 'Accepted') return;
+
+    final pickupGP = _acceptedBooking!['pickUp'] as GeoPoint?;
+    if (pickupGP == null) return;
+
+    final distance = Geolocator.distanceBetween(
+      _currentLatLng!.latitude,
+      _currentLatLng!.longitude,
+      pickupGP.latitude,
+      pickupGP.longitude,
+    );
+
+    _lastDistance = distance;
+
+    if (distance <= 100 && !_hasShownProximityDialog) {
+      _hasShownProximityDialog = true;
+      Future.microtask(() => _showStartRideDialog(distance));
+    }
+  }
+
+  Future<void> _showStartRideDialog(double distance) async {
+    if (!mounted) return;
+
+    final passengerName =
+        _acceptedBooking!['passenger'] as String? ?? 'Passenger';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.green, size: 32),
+            SizedBox(width: 8),
+            Text('Arrived at Pickup'),
+          ],
+        ),
+        content: Text(
+          'You are ${distance.toStringAsFixed(0)} meters from $passengerName\'s pickup location.\\n\\nReady to start the ride?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('NOT YET'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('START RIDE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _startRide();
+    } else {
+      _hasShownProximityDialog = false;
+    }
+  }
+
+  Future<void> _startRide() async {
+    try {
+      await _authService.firestore
+          .collection('bookings')
+          .doc(_acceptedBooking!['id'])
+          .update({
+        'status': 'In Progress',
+        'rideStartedAt': Timestamp.now(),
+      });
+
+      // Update local booking data
+      setState(() {
+        _acceptedBooking!['status'] = 'In Progress';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ride started! Have a safe trip.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error starting ride: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+      _hasShownProximityDialog = false;
     }
   }
 
@@ -568,6 +677,55 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    // Distance indicator
+                    if (_lastDistance != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _lastDistance! <= 100
+                                ? Colors.green.withOpacity(0.1)
+                                : theme.primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _lastDistance! <= 100
+                                  ? Colors.green
+                                  : theme.primaryColor,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _lastDistance! <= 100
+                                    ? Icons.location_on
+                                    : Icons.directions_car,
+                                color: _lastDistance! <= 100
+                                    ? Colors.green
+                                    : theme.primaryColor,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _lastDistance! < 1000
+                                    ? '${_lastDistance!.toStringAsFixed(0)}m from pickup'
+                                    : '${(_lastDistance! / 1000).toStringAsFixed(1)}km from pickup',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _lastDistance! <= 100
+                                      ? Colors.green
+                                      : theme.primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
                     // Action buttons
                     Row(

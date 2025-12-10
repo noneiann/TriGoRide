@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/services/auth_services.dart';
+import 'package:tri_go_ride/ui/login_screen.dart';
 
 import '../notifs_page.dart';
 
@@ -78,12 +79,62 @@ class PassengerProfile extends StatelessWidget {
                   onEdit: () => _navigateToEdit(
                       context, 'emergencyNum', 'Emergency Phone Number', data['emergencyNum']),
                 ),
+                SizedBox(height: 24),
+                // Logout Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _logout(context),
+                    icon: Icon(Icons.logout),
+                    label: Text('Log Out'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             );
           },
         ),
       ),
     );
+  }
+
+  void _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Log Out'),
+        content: Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('LOG OUT'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await AuthService().signOut();
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => LoginPage()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   void _navigateToEdit(

@@ -5,6 +5,7 @@ import 'package:tri_go_ride/ui/choose_user.dart';
 import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
 import 'package:tri_go_ride/ui/root_page_passenger.dart';
 import 'package:tri_go_ride/ui/root_page_rider.dart';
+import 'package:tri_go_ride/ui/email_verification_screen.dart';
 import '../services/auth_services.dart';
 
 class LoginPage extends StatefulWidget {
@@ -23,6 +24,71 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   bool _showPassword = false; // State variable for password visibility.
 
+  Future<void> _forgotPassword() async {
+    final emailController = TextEditingController(text: _email.text.trim());
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your email address to receive a password reset link.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('SEND'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      final email = emailController.text.trim();
+      if (email.isEmpty) {
+        setState(() => _error = 'Please enter your email address.');
+        return;
+      }
+
+      try {
+        await _authService.sendPasswordResetEmail(email);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Password reset email sent to $email'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        String errorMessage = 'Failed to send reset email';
+        if (e.toString().contains('user-not-found')) {
+          errorMessage = 'No account found with this email address.';
+        } else if (e.toString().contains('invalid-email')) {
+          errorMessage = 'Invalid email address format.';
+        }
+        setState(() => _error = errorMessage);
+      }
+    }
+  }
+
   Future<void> _login() async {
     setState(() => _loading = true);
     CollectionReference<Map<String, dynamic>> users =
@@ -34,6 +100,23 @@ class _LoginPageState extends State<LoginPage> {
         _password.text.trim(),
       );
       if (user != null) {
+        // Check if email is verified
+        if (!user.emailVerified) {
+          setState(() {
+            _loading = false;
+          });
+          
+          // Redirect to email verification screen (keep user signed in)
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const EmailVerificationScreen()),
+            );
+          }
+          return;
+        }
+
         // Navigate to Passenger home screen after successful login.
         DocumentSnapshot<Map<String, dynamic>> userSnapshot =
             await users.doc(user.email).get();
@@ -276,6 +359,17 @@ class _LoginPageState extends State<LoginPage> {
                             child: Text("Login"),
                           ),
                     SizedBox(height: 10),
+                    // Forgot Password Link
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _forgotPassword,
+                        child: Text(
+                          "Forgot Password?",
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      ),
+                    ),
                     // Navigation to registration.
                     TextButton(
                       onPressed: () {

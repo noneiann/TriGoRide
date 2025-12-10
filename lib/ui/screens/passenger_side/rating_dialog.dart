@@ -23,7 +23,7 @@ class EnhancedRatingDialog extends StatefulWidget {
 }
 
 class _EnhancedRatingDialogState extends State<EnhancedRatingDialog> {
-  int    _rating = 5;
+  int    _rating = 1;
   String _comment = '';
   bool   _isSubmitting = false;
 

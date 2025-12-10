@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';
+import 'package:tri_go_ride/ui/email_verification_screen.dart';
 import '../services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 
@@ -20,16 +21,26 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
   final TextEditingController _username = TextEditingController();
   final TextEditingController _phoneNumber = TextEditingController();
   final TextEditingController _confirmPassword = TextEditingController();
+  final TextEditingController _emergencyNumber = TextEditingController();
   final AuthService _authService = AuthService();
 
   String _error = '';
   bool _loading = false;
-  bool _showPassword = false; // State variable for password visibility.
+  bool _showPassword = false;
   bool _showConfirmPassword = false;
 
   void _register() async {
     setState(() => _loading = true);
     try {
+      // Validate emergency number
+      if (_emergencyNumber.text.trim().isEmpty) {
+        setState(() {
+          _error = 'Emergency contact number is required';
+          _loading = false;
+        });
+        return;
+      }
+
       final pwd = _password.text.trim();
       final confirm = _confirmPassword.text.trim();
       if (pwd != confirm) {
@@ -45,22 +56,28 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
         pwd,
       );
       if (user != null) {
+        // Send email verification
+        await user.sendEmailVerification();
+
         // Store additional profile info in Firestore
         await _authService.firestore.collection('users').doc(user.email).set({
           'uid': user.uid,
           'username': _username.text.trim(),
           'email': _email.text.trim(),
           'phone': _phoneNumber.text.trim(),
+          'emergencyNum': _emergencyNumber.text.trim(),
           'password': _password.text.trim(),
           'createdAt': FieldValue.serverTimestamp(),
           'userType': "Passenger",
         });
 
-        // Navigate to Passenger Home
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => HomeScreen()),
-        );
+        // Show verification dialog
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
+          );
+        }
       }
     } catch (e) {
       String errorMessage = 'Registration failed';
@@ -230,6 +247,36 @@ class _RegisterPassengerState extends State<RegisterPassenger> {
                               controller: _phoneNumber,
                               decoration: InputDecoration.collapsed(
                                 hintText: 'Phone Number',
+                                hintStyle: hintTextStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      width: width * 0.9,
+                      height: height * 0.06,
+                      padding: EdgeInsets.all(width * 0.03),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: containerColor,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.emergency,
+                            color: iconColor,
+                          ),
+                          SizedBox(width: width * 0.02),
+                          Expanded(
+                            child: TextField(
+                              controller: _emergencyNumber,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration.collapsed(
+                                hintText: 'Emergency Contact Number*',
                                 hintStyle: hintTextStyle,
                               ),
                             ),

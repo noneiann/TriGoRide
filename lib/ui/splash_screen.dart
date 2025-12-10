@@ -24,22 +24,47 @@ class _SplashScreenState extends State<SplashScreen> {
   Future<Widget> _decideStartScreen() async {
     final auth = AuthService();
     final user = auth.getUser();
-    if (user == null) return const LoginPage();
+
+    debugPrint('🔍 Checking auth state...');
+    debugPrint('User: ${user?.email}');
+
+    if (user == null) {
+      debugPrint('❌ No user found, showing LoginPage');
+      return const LoginPage();
+    }
+
+    // Check if email is verified
+    await user.reload(); // Refresh user state
+    final currentUser = auth.getUser();
+    if (currentUser != null && !currentUser.emailVerified) {
+      debugPrint('⚠️ Email not verified, logging out and showing LoginPage');
+      await auth.signOut();
+      return const LoginPage();
+    }
 
     try {
-      final doc = await auth.firestore
-          .collection('users')
-          .doc(user.email)
-          .get();
+      debugPrint('📡 Fetching user data from Firestore...');
+      final doc =
+          await auth.firestore.collection('users').doc(user.email).get();
+
+      debugPrint('📥 Document exists: ${doc.exists}');
+
       if (doc.exists) {
         final data = doc.data()!;
-        return data['userType'] == 'Passenger'
+        final userType = data['userType'];
+        debugPrint('✅ UserType: $userType');
+
+        return userType == 'Passenger'
             ? const RootPagePassenger()
             : const RootPageRider();
+      } else {
+        debugPrint('⚠️ User document not found in Firestore');
       }
     } catch (e) {
-      debugPrint('Auto-login failed: $e');
+      debugPrint('❌ Auto-login failed: $e');
     }
+
+    debugPrint('⤵️ Falling back to LoginPage');
     return const LoginPage();
   }
 

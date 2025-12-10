@@ -361,6 +361,8 @@ class _WaitingForDriverScreenState extends State<WaitingForDriverScreen> {
         'cancelledBy': 'passenger',
         'cancelledAt': Timestamp.now(),
         'active': false,
+        'declined_riders': [],
+        'assignedRider': FieldValue.delete(),
       });
 
       if (mounted) {

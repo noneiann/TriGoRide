@@ -500,6 +500,7 @@ class _BookRideScreenState extends State<BookRideScreen> {
       'specialAmount':
           _selectedPriority == 'special' ? _enteredSpecialAmount : 0.0,
       'passengerCount': _passengerCount,
+      'declined_riders': [],
     });
 
     // Get current user

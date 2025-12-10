@@ -5,6 +5,7 @@ import 'package:tri_go_ride/ui/screens/passenger_side/book_ride.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_profile.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_ride_history.dart';
+import 'package:tri_go_ride/ui/screens/passenger_side/passenger_bookings.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';            // ← your splash/login
 import '../../../services/auth_services.dart';                // ← AuthService
 
@@ -22,16 +23,16 @@ class _RootPagePassengerState extends State<RootPagePassenger> {
 
   final List<IconData> _iconList = [
     Icons.home,
-    Icons.person,
+    Icons.event_note,
     Icons.history,
-    Icons.logout,   // ← updated icon
+    Icons.person,
   ];
 
   final List<String> _titleList = [
     'Home',
+    'Bookings',
+    'History',
     'Profile',
-    'Ride History',
-    'Log Out',
   ];
 
   Widget _buildCurrentPage() {
@@ -39,12 +40,13 @@ class _RootPagePassengerState extends State<RootPagePassenger> {
       case 0:
         return const HomeScreen();
       case 1:
-        return PassengerProfile();
+        return const PassengerBookingsScreen();
       case 2:
         return const PassengerRideHistory();
+      case 3:
+        return PassengerProfile();
       default:
-      // we never actually render a “logout page”
-        return const SizedBox.shrink();
+        return const HomeScreen();
     }
   }
 
@@ -62,20 +64,7 @@ class _RootPagePassengerState extends State<RootPagePassenger> {
         gapLocation: GapLocation.center,
         notchSmoothness: NotchSmoothness.softEdge,
         onTap: (index) {
-          if (index == 3) {
-            // Log out!
-            _authService.signOut();
-            Navigator.pushAndRemoveUntil(
-              context,
-              PageTransition(
-                type: PageTransitionType.fade,
-                child: const LoginPage(),
-              ),
-                  (route) => false,
-            );
-          } else {
-            setState(() => _bottomNavIndex = index);
-          }
+          setState(() => _bottomNavIndex = index);
         },
       ),
       floatingActionButton: FloatingActionButton(

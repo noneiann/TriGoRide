@@ -9,6 +9,7 @@ import 'package:cloudinary_url_gen/transformation/transformation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../main.dart';
 import '../../root_page_passenger.dart';
 import '../passenger_side/rating_dialog.dart';
@@ -47,6 +48,8 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
   late StreamSubscription<DocumentSnapshot> _bookingSub;
   String? _lastStatus;
   final AuthService _authService = AuthService();
+  bool _hasShownProximityDialog = false;
+  double? _lastDistance;
 
   @override
   void initState() {
@@ -287,7 +290,7 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
             driverId: widget.driverUid,
             bookingId: widget.bookingId,
             onRatingComplete: () {
-              Navigator.of(context).pop(); // dismiss dialog
+              Navigator.of(context).pop();
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const RootPagePassenger()),
                 (route) => false,
@@ -305,6 +308,95 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
       final loc = LatLng(gp.latitude, gp.longitude);
       setState(() => _driverLocation = loc);
       _mapController?.animateCamera(CameraUpdate.newLatLng(loc));
+
+      // 3) Check proximity to pickup location
+      _checkProximityToPickup(loc);
+    }
+  }
+
+  void _checkProximityToPickup(LatLng driverLoc) {
+    if (_hasShownProximityDialog) return;
+    if (_lastStatus != 'Accepted') return;
+
+    final distance = Geolocator.distanceBetween(
+      driverLoc.latitude,
+      driverLoc.longitude,
+      widget.pickUp.latitude,
+      widget.pickUp.longitude,
+    );
+
+    _lastDistance = distance;
+
+    if (distance <= 100 && !_hasShownProximityDialog) {
+      _hasShownProximityDialog = true;
+      Future.microtask(() => _showStartRideDialog(distance));
+    }
+  }
+
+  Future<void> _showStartRideDialog(double distance) async {
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.location_on, color: Colors.green, size: 32),
+            SizedBox(width: 8),
+            Text('Driver Arrived'),
+          ],
+        ),
+        content: Text(
+          'Your driver is ${distance.toStringAsFixed(0)} meters away from your pickup location.\n\nReady to start the ride?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('NOT YET'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('START RIDE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _startRide();
+    } else {
+      _hasShownProximityDialog = false;
+    }
+  }
+
+  Future<void> _startRide() async {
+    try {
+      await _authService.firestore
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .update({
+        'status': 'In Progress',
+        'rideStartedAt': Timestamp.now(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ride started! Have a safe trip.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error starting ride: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+      _hasShownProximityDialog = false;
     }
   }
 
@@ -482,6 +574,52 @@ class _DriverInfoScreenState extends State<DriverInfoScreen> {
                         _buildInfoTile('Phone', d['phone'] ?? 'N/A', theme),
                         _buildInfoTile(
                             'Plate Number', d['plateNumber'] ?? 'N/A', theme),
+                        if (_lastDistance != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: _lastDistance! <= 100
+                                    ? Colors.green.withOpacity(0.1)
+                                    : theme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _lastDistance! <= 100
+                                      ? Colors.green
+                                      : theme.primaryColor,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _lastDistance! <= 100
+                                        ? Icons.location_on
+                                        : Icons.directions_car,
+                                    color: _lastDistance! <= 100
+                                        ? Colors.green
+                                        : theme.primaryColor,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _lastDistance! < 1000
+                                        ? '${_lastDistance!.toStringAsFixed(0)}m away'
+                                        : '${(_lastDistance! / 1000).toStringAsFixed(1)}km away',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: _lastDistance! <= 100
+                                          ? Colors.green
+                                          : theme.primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

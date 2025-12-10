@@ -18,11 +18,49 @@ class FirstTimeProfileSetup extends StatefulWidget {
 
 class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
   final CollectionReference<Map<String, dynamic>> _users =
-  AuthService().firestore.collection('users');
+      AuthService().firestore.collection('users');
   final String _uid = AuthService().getUser()!.uid;
   final ImagePicker _picker = ImagePicker();
 
-  String? _localImageUrl; // temporarily holds uploaded URL
+  String? _localImageUrl;
+  bool _uploadingInitialImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _uploadTempProfileImage();
+  }
+
+  Future<void> _uploadTempProfileImage() async {
+    final email = AuthService().getUser()?.email;
+    if (email == null) return;
+
+    final doc = await _users.doc(email).get();
+    final data = doc.data();
+    if (data == null) return;
+
+    final tempPath = data['tempProfileImagePath'] as String?;
+    if (tempPath != null && tempPath.isNotEmpty) {
+      setState(() => _uploadingInitialImage = true);
+
+      try {
+        final url = await CloudinaryService.uploadImage(File(tempPath));
+        if (url != null) {
+          await _users.doc(email).update({
+            'profileImage': url,
+            'tempProfileImagePath': FieldValue.delete(),
+          });
+          setState(() {
+            _localImageUrl = url['url'];
+            _uploadingInitialImage = false;
+          });
+        }
+      } catch (e) {
+        debugPrint('Error uploading temp profile image: $e');
+        setState(() => _uploadingInitialImage = false);
+      }
+    }
+  }
 
   Future<void> _uploadAndSaveProfilePicture() async {
     final XFile? picked = await _picker.pickImage(source: ImageSource.gallery);
@@ -46,8 +84,8 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
     }
   }
 
-  void _navigateToEdit(
-      BuildContext context, String fieldKey, String label, String currentValue) {
+  void _navigateToEdit(BuildContext context, String fieldKey, String label,
+      String currentValue) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => EditFieldPage(
         fieldKey: fieldKey,
@@ -95,30 +133,48 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
               imageMap = data['profileImage'] as Map<String, dynamic>;
               profileImage = _localImageUrl ?? imageMap['url'];
             } else {
-              profileImage = "https://res.cloudinary.com/dgu4lwrwn/image/upload/v1747147170/samples/logo.png";
+              profileImage =
+                  "https://res.cloudinary.com/dgu4lwrwn/image/upload/v1747147170/samples/logo.png";
             }
 
-
-
             return ListView(
-              padding:
-              const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
               children: [
                 Center(
                   child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 60,
-                        backgroundImage: profileImage != null
-                            ? NetworkImage(profileImage)
-                            : null,
-                        child: profileImage == null
-                            ? const Icon(Icons.person, size: 60)
-                            : null,
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 60,
+                            backgroundImage: profileImage != null
+                                ? NetworkImage(profileImage)
+                                : null,
+                            child: profileImage == null
+                                ? const Icon(Icons.person, size: 60)
+                                : null,
+                          ),
+                          if (_uploadingInitialImage)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withOpacity(0.5),
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       ElevatedButton.icon(
-                        onPressed: _uploadAndSaveProfilePicture,
+                        onPressed: _uploadingInitialImage
+                            ? null
+                            : _uploadAndSaveProfilePicture,
                         icon: const Icon(Icons.upload),
                         label: const Text('Upload Profile Picture'),
                       ),
@@ -153,19 +209,16 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
                   label: 'Plate number',
                   content: Text(data['plateNumber'] ?? '',
                       style: const TextStyle(fontSize: 16)),
-                  onEdit: () => _navigateToEdit(
-                      context,
-                      'plateNumber',
-                      'Plate Number',
-                      data['plateNumber'] ?? ''),
+                  onEdit: () => _navigateToEdit(context, 'plateNumber',
+                      'Plate Number', data['plateNumber'] ?? ''),
                 ),
                 const SizedBox(height: 12),
                 InfoCard(
                   label: 'Password',
                   content:
-                  const Text('••••••••', style: TextStyle(fontSize: 16)),
-                  onEdit: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ChangePasswordPage())),
+                      const Text('••••••••', style: TextStyle(fontSize: 16)),
+                  onEdit: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const ChangePasswordPage())),
                 ),
               ],
             );
@@ -197,13 +250,17 @@ class InfoCard extends StatelessWidget {
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: const Offset(0, 2))
+          BoxShadow(
+              color: Colors.black.withOpacity(0.07),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
         ],
       ),
       child: Stack(
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+            Text(label,
+                style: TextStyle(color: Colors.grey[600], fontSize: 14)),
             const SizedBox(height: 8),
             content,
           ]),
@@ -264,8 +321,8 @@ class _EditFieldPageState extends State<EditFieldPage> {
       Navigator.of(context).pop();
     } catch (e) {
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error saving ${widget.label}: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving ${widget.label}: $e')));
     }
   }
 
@@ -288,7 +345,10 @@ class _EditFieldPageState extends State<EditFieldPage> {
               onPressed: _saving ? null : _save,
               child: _saving
                   ? const SizedBox(
-                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Text('Save'),
             ),
           ]),
@@ -351,14 +411,17 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               decoration: const InputDecoration(labelText: 'New Password'),
               obscureText: true,
               validator: (v) =>
-              v!.length < 6 ? 'Password must be at least 6 chars' : null,
+                  v!.length < 6 ? 'Password must be at least 6 chars' : null,
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _saving ? null : _changePassword,
               child: _saving
                   ? const SizedBox(
-                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Text('Save'),
             ),
           ]),

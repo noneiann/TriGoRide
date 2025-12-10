@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:tri_go_ride/ui/choose_user.dart';
 import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
+import 'package:tri_go_ride/ui/email_verification_screen.dart';
 import '../services/auth_services.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';
@@ -21,12 +24,37 @@ class _RegisterDriverState extends State<RegisterDriver> {
   final TextEditingController _username = TextEditingController();
   final TextEditingController _phoneNumber = TextEditingController();
   final TextEditingController _confirmPassword = TextEditingController();
+  final TextEditingController _licensePlate = TextEditingController();
   final AuthService _authService = AuthService();
+  final ImagePicker _picker = ImagePicker();
 
   String _error = '';
   bool _loading = false;
-  bool _showPassword = false; // State variable for password visibility.
+  bool _showPassword = false;
   bool _showConfirmPassword = false;
+  File? _profileImage;
+
+  Future<void> _pickProfileImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (image != null) {
+        setState(() {
+          _profileImage = File(image.path);
+          _error = '';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Error picking image: $e';
+      });
+    }
+  }
+
   void _login() async {
     setState(() => _loading = true);
     try {
@@ -74,6 +102,23 @@ class _RegisterDriverState extends State<RegisterDriver> {
   void _register() async {
     setState(() => _loading = true);
     try {
+      // Validate required fields
+      if (_profileImage == null) {
+        setState(() {
+          _error = 'Profile photo is required';
+          _loading = false;
+        });
+        return;
+      }
+
+      if (_licensePlate.text.trim().isEmpty) {
+        setState(() {
+          _error = 'License plate number is required';
+          _loading = false;
+        });
+        return;
+      }
+
       final pwd = _password.text.trim();
       final confirm = _confirmPassword.text.trim();
       if (pwd != confirm) {
@@ -89,34 +134,40 @@ class _RegisterDriverState extends State<RegisterDriver> {
         pwd,
       );
       if (user != null) {
+        // Send email verification
+        await user.sendEmailVerification();
+
         // Store additional profile info in Firestore
         await _authService.firestore.collection('users').doc(user.email).set({
           'uid': user.uid,
           'username': _username.text.trim(),
           'email': _email.text.trim(),
           'phone': _phoneNumber.text.trim(),
+          'plateNumber': _licensePlate.text.trim().toUpperCase(),
           'createdAt': FieldValue.serverTimestamp(),
           'userType': "Driver",
           'verified': false,
-          'firstTimeLogIn': true
+          'firstTimeLogIn': true,
+          'tempProfileImagePath': _profileImage!.path,
         });
 
         showDialog(
           context: context,
+          barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: Text("Registration Successful"),
+            title: const Text("Verify Your Email"),
             content: Text(
-                "Welcome! Proceed to account setup to setup your driver profile."),
+                "A verification email has been sent to ${_email.text.trim()}. Please verify your email before logging in."),
             actions: [
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => FirstTimeProfileSetup()),
+                    MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
                   );
                 },
-                child: Text("OK"),
+                child: const Text("OK"),
               ),
             ],
           ),
@@ -165,10 +216,11 @@ class _RegisterDriverState extends State<RegisterDriver> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Column(
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
             // Fixed Logo Container - always at the top.
             Container(
                 padding: EdgeInsets.only(top: 64),
@@ -210,7 +262,68 @@ class _RegisterDriverState extends State<RegisterDriver> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Email Field with icon fixed using a Row and Expanded widget.
+                    // Profile Photo Picker
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: containerColor,
+                          border: Border.all(
+                            color: _profileImage == null
+                                ? Colors.red
+                                : Colors.green,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: _profileImage != null
+                            ? ClipOval(
+                                child: Image.file(
+                                  _profileImage!,
+                                  fit: BoxFit.cover,
+                                  width: 120,
+                                  height: 120,
+                                ),
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_a_photo,
+                                    size: 40,
+                                    color: iconColor,
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Add Photo*',
+                                    style: TextStyle(
+                                      color: theme.hintColor,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Profile Photo Required',
+                      style: TextStyle(
+                        color: Colors.orange,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 24),
                     Container(
                       width: width * 0.9,
                       height: height * 0.06,
@@ -290,6 +403,36 @@ class _RegisterDriverState extends State<RegisterDriver> {
                               controller: _phoneNumber,
                               decoration: InputDecoration.collapsed(
                                 hintText: 'Phone Number',
+                                hintStyle: hintTextStyle,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Container(
+                      width: width * 0.9,
+                      height: height * 0.06,
+                      padding: EdgeInsets.all(width * 0.03),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: containerColor,
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.directions_car,
+                            color: iconColor,
+                          ),
+                          SizedBox(width: width * 0.02),
+                          Expanded(
+                            child: TextField(
+                              controller: _licensePlate,
+                              textCapitalization: TextCapitalization.characters,
+                              decoration: InputDecoration.collapsed(
+                                hintText: 'License Plate Number*',
                                 hintStyle: hintTextStyle,
                               ),
                             ),
@@ -430,6 +573,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
