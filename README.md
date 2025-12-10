@@ -1,4 +1,4 @@
-# 🚖 TriGoRide
+# TriGoRide
 
 <div align="center">
 
