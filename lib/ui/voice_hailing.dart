@@ -177,8 +177,8 @@ class _VoiceInputScreenState extends State<VoiceInputScreen>
         : "Where would you like to be dropped off?";
 
     final subtitle = _phasePickup
-        ? "Speak a location in Oroquieta City (e.g., 'City Hall', 'Plaza')"
-        : "Speak your destination in Oroquieta City";
+        ? "Speak a location within Oroquieta City only (e.g., 'City Hall', 'Plaza')"
+        : "Speak your destination within Oroquieta City only";
 
     return Scaffold(
       backgroundColor:

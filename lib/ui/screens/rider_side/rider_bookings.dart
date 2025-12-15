@@ -40,6 +40,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
 
   // periodic update timer
   Timer? _locationUpdateTimer;
+  StreamSubscription<DocumentSnapshot>? _bookingStatusListener;
 
   // proximity tracking
   bool _hasShownProximityDialog = false;
@@ -54,6 +55,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
   @override
   void dispose() {
     _locationUpdateTimer?.cancel();
+    _bookingStatusListener?.cancel();
     super.dispose();
   }
 
@@ -67,6 +69,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     if (_acceptedBooking != null) {
       await _getRoadPolylines();
       _startLocationUpdates(); // begin sending location updates
+      _listenToBookingStatus(); // monitor for cancellations
     }
 
     setState(() => _loading = false);
@@ -86,6 +89,70 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
     } catch (e) {
       debugPrint('Error fetching user location: $e');
     }
+  }
+
+  void _listenToBookingStatus() {
+    if (_acceptedBooking == null) return;
+
+    final bookingId = _acceptedBooking!['id'] as String;
+    _bookingStatusListener = _authService.firestore
+        .collection('bookings')
+        .doc(bookingId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists) {
+        _handleBookingCancellation('Booking no longer exists');
+        return;
+      }
+
+      final data = snapshot.data();
+      if (data == null) return;
+
+      final status = data['status'] as String?;
+
+      // Check if booking was cancelled
+      if (status == 'Cancelled') {
+        final cancelledBy = data['cancelledBy'] as String? ?? 'passenger';
+        _handleBookingCancellation(cancelledBy == 'passenger'
+            ? 'Passenger cancelled the ride'
+            : 'Ride was cancelled');
+      }
+    });
+  }
+
+  void _handleBookingCancellation(String message) {
+    // Cancel timers
+    _locationUpdateTimer?.cancel();
+    _bookingStatusListener?.cancel();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.cancel, color: Colors.red, size: 32),
+            SizedBox(width: 8),
+            Text('Ride Cancelled'),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const RootPageRider()),
+              );
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadAcceptedBooking() async {
@@ -220,7 +287,7 @@ class _RiderBookingsPageState extends State<RiderBookingsPage> {
           ],
         ),
         content: Text(
-          'You are ${distance.toStringAsFixed(0)} meters from $passengerName\'s pickup location.\\n\\nReady to start the ride?',
+          'You are ${distance.toStringAsFixed(0)} meters from $passengerName\'s pickup location.\n\nReady to start the ride?',
         ),
         actions: [
           TextButton(

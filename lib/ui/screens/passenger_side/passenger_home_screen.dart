@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/book_ride.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_profile.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_ride_history.dart';
+import 'package:tri_go_ride/ui/screens/passenger_side/passenger_bookings.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';
 
 import '../../../main.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
     'Book A Ride': BookRideScreen(),
     'Ride History': PassengerRideHistory(),
     'Profile': PassengerProfile(),
-    'Logout': LoginPage(),
+    'Current Booking': PassengerBookingsScreen(),
   };
 
   @override
@@ -170,18 +171,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: entry.key,
                     onTap: () {
                       final page = screens[entry.key]!;
-                      if (entry.key != 'Logout') {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => page),
-                        );
-                      } else {
-                        _authService.signOut();
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => LoginPage()),
-                        );
-                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => page),
+                      );
                     },
                   ),
                 );
@@ -260,8 +253,8 @@ Widget _iconOrImageForLabel(String label) {
       return Image.asset('assets/p-08.png', width: 40, height: 40);
     case 'Profile':
       return Icon(Icons.person, size: 40, color: Colors.orange);
-    case 'Logout':
-      return Image.asset('assets/p-06.png', width: 40, height: 40);
+    case 'Current Booking':
+      return Icon(Icons.event_note, size: 40, color: Colors.orange);
     default:
       return Icon(Icons.help_outline, size: 40, color: Colors.orange);
   }

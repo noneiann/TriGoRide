@@ -7,6 +7,7 @@ import 'package:tri_go_ride/ui/choose_user.dart';
 import 'package:tri_go_ride/ui/first_time_profile_setup.dart';
 import 'package:tri_go_ride/ui/email_verification_screen.dart';
 import '../services/auth_services.dart';
+import '../services/cloudinary_service.dart';
 import 'package:tri_go_ride/ui/screens/passenger_side/passenger_home_screen.dart';
 import 'package:tri_go_ride/ui/login_screen.dart';
 
@@ -33,6 +34,7 @@ class _RegisterDriverState extends State<RegisterDriver> {
   bool _showPassword = false;
   bool _showConfirmPassword = false;
   File? _profileImage;
+  File? _licenseImage;
 
   Future<void> _pickProfileImage() async {
     try {
@@ -51,6 +53,27 @@ class _RegisterDriverState extends State<RegisterDriver> {
     } catch (e) {
       setState(() {
         _error = 'Error picking image: $e';
+      });
+    }
+  }
+
+  Future<void> _pickLicenseImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+      if (image != null) {
+        setState(() {
+          _licenseImage = File(image.path);
+          _error = '';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Error picking license image: $e';
       });
     }
   }
@@ -119,6 +142,14 @@ class _RegisterDriverState extends State<RegisterDriver> {
         return;
       }
 
+      if (_licenseImage == null) {
+        setState(() {
+          _error = 'Driver\'s license photo is required';
+          _loading = false;
+        });
+        return;
+      }
+
       final pwd = _password.text.trim();
       final confirm = _confirmPassword.text.trim();
       if (pwd != confirm) {
@@ -134,10 +165,42 @@ class _RegisterDriverState extends State<RegisterDriver> {
         pwd,
       );
       if (user != null) {
+        // Upload images to Cloudinary
+        Map<String, dynamic>? profileImageData;
+        Map<String, dynamic>? licenseImageData;
+
+        try {
+          // Upload profile image with profile preset
+          profileImageData = await CloudinaryService.uploadImage(
+            _profileImage!,
+            uploadPreset: 'profile-photos',
+          );
+          if (profileImageData == null) {
+            throw Exception('Failed to upload profile image');
+          }
+
+          // Upload license image with license preset
+          licenseImageData = await CloudinaryService.uploadImage(
+            _licenseImage!,
+            uploadPreset: 'license-photos',
+          );
+          if (licenseImageData == null) {
+            throw Exception('Failed to upload license image');
+          }
+        } catch (e) {
+          // Delete the created user if image upload fails
+          await user.delete();
+          setState(() {
+            _error = 'Failed to upload images. Please try again.';
+            _loading = false;
+          });
+          return;
+        }
+
         // Send email verification
         await user.sendEmailVerification();
 
-        // Store additional profile info in Firestore
+        // Store additional profile info in Firestore with Cloudinary URLs
         await _authService.firestore.collection('users').doc(user.email).set({
           'uid': user.uid,
           'username': _username.text.trim(),
@@ -148,7 +211,8 @@ class _RegisterDriverState extends State<RegisterDriver> {
           'userType': "Driver",
           'verified': false,
           'firstTimeLogIn': true,
-          'tempProfileImagePath': _profileImage!.path,
+          'profileImage': profileImageData,
+          'licenseImage': licenseImageData,
         });
 
         showDialog(
@@ -442,7 +506,81 @@ class _RegisterDriverState extends State<RegisterDriver> {
                           ],
                         ),
                       ),
-                      SizedBox(height: 10),
+                      SizedBox(height: 24),
+
+                      // Driver's License Photo Picker
+                      GestureDetector(
+                        onTap: _pickLicenseImage,
+                        child: Container(
+                          width: width * 0.9,
+                          height: 140,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: containerColor,
+                            border: Border.all(
+                              color: _licenseImage == null
+                                  ? Colors.red
+                                  : Colors.green,
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: _licenseImage != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    _licenseImage!,
+                                    fit: BoxFit.cover,
+                                    width: width * 0.9,
+                                    height: 140,
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.badge,
+                                      size: 48,
+                                      color: iconColor,
+                                    ),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Upload Driver\'s License*',
+                                      style: TextStyle(
+                                        color: theme.hintColor,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Tap to select image',
+                                      style: TextStyle(
+                                        color: theme.hintColor.withOpacity(0.7),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Driver\'s License Photo Required',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+
+                      SizedBox(height: 24),
                       // Password Field with show/hide functionality and centered IconButton.
                       Container(
                         width: width * 0.9,

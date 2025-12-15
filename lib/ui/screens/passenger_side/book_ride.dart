@@ -209,8 +209,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
   // BASE COST FOR DATABASE STORAGE
   double get _baseRideCostForDatabase {
     if (_selectedPriority == 'special') {
-      final baseSpecial =
-          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      final normalFare = _baseRideCost; // Calculate normal fare
+      final baseSpecial = _enteredSpecialAmount < normalFare
+          ? normalFare
+          : _enteredSpecialAmount;
       return baseSpecial;
     }
     return _baseRideCost;
@@ -219,8 +221,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
   // TOTAL FARE CALCULATION
   double get _totalPayableFare {
     if (_selectedPriority == 'special') {
-      final baseSpecial =
-          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      final normalFare = _baseRideCost; // Calculate normal fare
+      final baseSpecial = _enteredSpecialAmount < normalFare
+          ? normalFare
+          : _enteredSpecialAmount;
       final serviceFee = _serviceFeeAmount;
       final total = baseSpecial + serviceFee;
       return double.parse(total.toStringAsFixed(2));
@@ -455,8 +459,10 @@ class _BookRideScreenState extends State<BookRideScreen> {
         'Passengers: $_passengerCount\n\n';
 
     if (_selectedPriority == 'special') {
-      final baseSpecial =
-          _enteredSpecialAmount < 60 ? 60.0 : _enteredSpecialAmount;
+      final normalFare = _baseRideCost; // Calculate normal fare
+      final baseSpecial = _enteredSpecialAmount < normalFare
+          ? normalFare
+          : _enteredSpecialAmount;
       final serviceFee = _serviceFeeAmount;
       dialogContent += 'Base Special Fare: ₱${baseSpecial.toStringAsFixed(2)}\n'
           'Service Fee (10% of distance-based): ₱${serviceFee.toStringAsFixed(2)}\n';

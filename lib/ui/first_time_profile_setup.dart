@@ -23,6 +23,7 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
   final ImagePicker _picker = ImagePicker();
 
   String? _localImageUrl;
+  String? _localLicenseUrl;
   bool _uploadingInitialImage = false;
 
   @override
@@ -127,6 +128,8 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
             }
             final data = snap.data?.data();
             if (data == null) return Center(child: Text(_uid));
+
+            // Profile Image
             final Map<String, dynamic> imageMap;
             final String profileImage;
             if (data['profileImage'] != null) {
@@ -135,6 +138,13 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
             } else {
               profileImage =
                   "https://res.cloudinary.com/dgu4lwrwn/image/upload/v1747147170/samples/logo.png";
+            }
+
+            // License Image
+            String? licenseImage;
+            if (data['licenseImage'] != null) {
+              final licenseMap = data['licenseImage'] as Map<String, dynamic>;
+              licenseImage = _localLicenseUrl ?? licenseMap['url'];
             }
 
             return ListView(
@@ -181,6 +191,80 @@ class _FirstTimeProfileSetupState extends State<FirstTimeProfileSetup> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 32),
+
+                // Driver's License Section
+                if (data['plateNumber'] != null) ...[
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Driver\'s License',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (licenseImage != null)
+                    Container(
+                      width: double.infinity,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          licenseImage,
+                          width: double.infinity,
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.orange),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.orange[50],
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              size: 48,
+                              color: Colors.orange[700],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No License Uploaded',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.orange[700],
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Please upload during registration',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                ],
+
                 const SizedBox(height: 24),
                 InfoCard(
                   label: 'Name',

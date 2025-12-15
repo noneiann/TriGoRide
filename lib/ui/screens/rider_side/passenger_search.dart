@@ -210,6 +210,30 @@ class _PassengerSearchPageState extends State<PassengerSearchPage> {
     final rider = _auth.getUser()!;
     final paxName = booking['passenger'] as String;
 
+    // Check if booking is still pending (not cancelled)
+    final bookingDoc =
+        await _auth.firestore.collection('bookings').doc(bid).get();
+    if (!bookingDoc.exists) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This booking no longer exists')),
+        );
+      }
+      return;
+    }
+
+    final currentStatus = bookingDoc.data()?['status'] as String?;
+    if (currentStatus != 'Pending') {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'This booking is no longer available (Status: $currentStatus)')),
+        );
+      }
+      return;
+    }
+
     // Update booking status and assign rider
     await _auth.firestore.collection('bookings').doc(bid).update({
       'status': 'Accepted',

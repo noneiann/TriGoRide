@@ -4,17 +4,22 @@ import 'package:http/http.dart' as http;
 
 class CloudinaryService {
   static const String _cloudName = 'dgu4lwrwn';
-  static const String _uploadPreset = 'profile-photos';
-
+  static const String _profilePhotosPreset = 'profile-photos';
+  static const String _licensePhotosPreset = 'license-photos';
 
   static String get cloudName => _cloudName;
 
-  static Future<Map<String, dynamic>?> uploadImage(File imageFile) async {
-    final url = Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/image/upload');
+  static Future<Map<String, dynamic>?> uploadImage(
+    File imageFile, {
+    String? uploadPreset,
+  }) async {
+    final preset = uploadPreset ?? _profilePhotosPreset;
+    final url =
+        Uri.parse('https://api.cloudinary.com/v1_1/$_cloudName/image/upload');
 
     try {
       final request = http.MultipartRequest('POST', url)
-        ..fields['upload_preset'] = _uploadPreset
+        ..fields['upload_preset'] = preset
         ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
       final response = await request.send();
